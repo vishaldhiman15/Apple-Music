@@ -50,8 +50,7 @@ export default function Sidebar() {
   const { currentUser, users, login } = useAuthStore()
   const userData = useDataStore(state => state.getUserData())
 
-  const currentId = currentUser?._id || currentUser?.id || currentUser
-  const activeUser = users?.find(u => u.id === currentId) || users?.[0] || { name: 'Guest' }
+  const activeUser = currentUser || { name: 'Guest', avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Guest' }
 
   return (
     <aside className="w-sidebar h-full sidebar-glass flex flex-col select-none relative z-20">
