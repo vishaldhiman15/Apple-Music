@@ -79,8 +79,13 @@ export default function UploadPage() {
     })
     
     if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.error?.message || 'Cloudinary upload failed')
+      const errText = await res.text()
+      try {
+        const err = JSON.parse(errText)
+        throw new Error(err.error?.message || 'Cloudinary upload failed')
+      } catch (e) {
+        throw new Error(`Cloudinary Error: ${errText.substring(0, 100)}`)
+      }
     }
     return await res.json()
   }
@@ -108,7 +113,10 @@ export default function UploadPage() {
       const audioSigRes = await fetch('/api/songs/signature', {
         headers: { Authorization: `Bearer ${currentUser?.token}` }
       })
-      if (!audioSigRes.ok) throw new Error('Failed to get upload signature')
+      if (!audioSigRes.ok) {
+        const t = await audioSigRes.text()
+        throw new Error(`Failed to get audio signature: ${t.substring(0, 60)}`)
+      }
       const audioSigData = await audioSigRes.json()
 
       // 2. Upload audio directly to Cloudinary
@@ -122,7 +130,10 @@ export default function UploadPage() {
         const coverSigRes = await fetch('/api/songs/cover-signature', {
           headers: { Authorization: `Bearer ${currentUser?.token}` }
         })
-        if (!coverSigRes.ok) throw new Error('Failed to get artwork signature')
+        if (!coverSigRes.ok) {
+          const t = await coverSigRes.text()
+          throw new Error(`Failed to get artwork signature: ${t.substring(0, 60)}`)
+        }
         const coverSigData = await coverSigRes.json()
 
         const coverUploadData = await uploadToCloudinary(coverFile, coverSigData, 'applemusic/images')
@@ -152,8 +163,13 @@ export default function UploadPage() {
         removeAudio()
         removeCover()
       } else {
-        const error = await res.json()
-        throw new Error(error.message || 'Database save failed')
+        const errorText = await res.text()
+        try {
+          const error = JSON.parse(errorText)
+          throw new Error(error.message || 'Database save failed')
+        } catch (e) {
+          throw new Error(`Database save failed: ${errorText.substring(0, 100)}`)
+        }
       }
     } catch (err) {
       setMessage('Upload error: ' + err.message)
