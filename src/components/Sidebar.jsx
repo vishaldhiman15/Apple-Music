@@ -56,13 +56,7 @@ export default function Sidebar() {
   return (
     <aside className="w-sidebar h-full sidebar-glass flex flex-col select-none relative z-20">
       {/* macOS title bar spacer */}
-      <div className="h-[52px] flex-shrink-0 flex items-end px-4 pb-2">
-        <div className="flex gap-2">
-          <div className="w-3 h-3 rounded-full bg-[#ff5f57]" />
-          <div className="w-3 h-3 rounded-full bg-[#febc2e]" />
-          <div className="w-3 h-3 rounded-full bg-[#28c840]" />
-        </div>
-      </div>
+      <div className="h-[52px] flex-shrink-0"></div>
 
       {/* Navigation */}
       <nav className="flex-1 pb-4 overflow-y-auto scrollbar-hide">
