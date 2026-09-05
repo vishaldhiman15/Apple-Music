@@ -4,7 +4,7 @@ const Song = require('../models/Song')
 const Album = require('../models/Album')
 const Artist = require('../models/Artist')
 const { protect } = require('../middlewares/authMiddleware')
-const { upload } = require('../config/cloudinary')
+const { cloudinary } = require('../config/cloudinary')
 
 // @route   GET /api/songs
 // @desc    Get all songs
@@ -18,29 +18,72 @@ router.get('/', async (req, res) => {
   }
 })
 
-// @route   POST /api/songs/upload
-// @desc    Upload a new song and cover art to Cloudinary
-// @access  Private (In a real app, maybe Admin only. We allow users here for demo)
-router.post('/upload', protect, upload.fields([{ name: 'audio', maxCount: 1 }, { name: 'cover', maxCount: 1 }]), async (req, res) => {
+// @route   GET /api/songs/signature
+// @desc    Get Cloudinary signature for direct upload
+// @access  Private
+router.get('/signature', protect, (req, res) => {
   try {
-    const { title, artistName, albumTitle, duration, genre, releaseYear, explicit } = req.body
+    const timestamp = Math.round((new Date).getTime() / 1000)
+    // Create signature for audio upload
+    const signature = cloudinary.utils.api_sign_request({
+      timestamp: timestamp,
+      folder: 'applemusic/audio'
+    }, process.env.CLOUDINARY_API_SECRET)
 
-    if (!req.files || !req.files.audio) {
-      return res.status(400).json({ message: 'Audio file is required' })
+    res.json({
+      signature,
+      timestamp,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+})
+
+// @route   GET /api/songs/cover-signature
+// @desc    Get Cloudinary signature for direct cover upload
+// @access  Private
+router.get('/cover-signature', protect, (req, res) => {
+  try {
+    const timestamp = Math.round((new Date).getTime() / 1000)
+    const signature = cloudinary.utils.api_sign_request({
+      timestamp: timestamp,
+      folder: 'applemusic/images'
+    }, process.env.CLOUDINARY_API_SECRET)
+
+    res.json({
+      signature,
+      timestamp,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message })
+  }
+})
+
+// @route   POST /api/songs/upload
+// @desc    Save new song details to DB
+// @access  Private
+router.post('/upload', protect, async (req, res) => {
+  try {
+    const { title, artistName, albumTitle, duration, genre, releaseYear, explicit, audioUrl, coverUrl } = req.body
+
+    if (!audioUrl) {
+      return res.status(400).json({ message: 'Audio URL is required' })
     }
 
-    const audioUrl = req.files.audio[0].path
-    const coverUrl = req.files.cover ? req.files.cover[0].path : 'https://via.placeholder.com/200/2a2a2c/666?text=New'
+    const finalCoverUrl = coverUrl || 'https://via.placeholder.com/200/2a2a2c/666?text=New'
 
-    // Simple create/find Artist & Album for this demo
     let artist = await Artist.findOne({ name: artistName })
     if (!artist) {
-      artist = await Artist.create({ name: artistName, image: coverUrl })
+      artist = await Artist.create({ name: artistName, image: finalCoverUrl })
     }
 
     let album = await Album.findOne({ title: albumTitle, artist: artist._id })
     if (!album) {
-      album = await Album.create({ title: albumTitle, artist: artist._id, coverUrl, year: releaseYear || new Date().getFullYear().toString(), genre })
+      album = await Album.create({ title: albumTitle, artist: artist._id, coverUrl: finalCoverUrl, year: releaseYear || new Date().getFullYear().toString(), genre })
     }
 
     const newSong = await Song.create({
@@ -49,7 +92,7 @@ router.post('/upload', protect, upload.fields([{ name: 'audio', maxCount: 1 }, {
       albumId: album._id,
       duration: Number(duration),
       audioUrl,
-      coverUrl,
+      coverUrl: finalCoverUrl,
       genre,
       releaseYear,
       explicit: explicit === 'true' || explicit === true

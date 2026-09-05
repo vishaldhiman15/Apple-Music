@@ -65,6 +65,26 @@ export default function UploadPage() {
     if (coverInputRef.current) coverInputRef.current.value = ''
   }
 
+  const uploadToCloudinary = async (file, signatureData, folder) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('api_key', signatureData.apiKey)
+    form.append('timestamp', signatureData.timestamp)
+    form.append('signature', signatureData.signature)
+    form.append('folder', folder)
+
+    const res = await fetch(`https://api.cloudinary.com/v1_1/${signatureData.cloudName}/auto/upload`, {
+      method: 'POST',
+      body: form
+    })
+    
+    if (!res.ok) {
+      const err = await res.json()
+      throw new Error(err.error?.message || 'Cloudinary upload failed')
+    }
+    return await res.json()
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!audioFile) {
@@ -79,21 +99,52 @@ export default function UploadPage() {
     }
 
     setLoading(true)
-    setMessage('')
+    setMessage('Starting upload...')
     setIsError(false)
 
-    const form = new FormData()
-    form.append('audio', audioFile)
-    if (coverFile) form.append('cover', coverFile)
-    Object.keys(formData).forEach(key => form.append(key, formData[key]))
-    form.append('duration', duration)
-
     try {
+      // 1. Get audio signature
+      setMessage('Uploading audio...')
+      const audioSigRes = await fetch('/api/songs/signature', {
+        headers: { Authorization: `Bearer ${currentUser?.token}` }
+      })
+      if (!audioSigRes.ok) throw new Error('Failed to get upload signature')
+      const audioSigData = await audioSigRes.json()
+
+      // 2. Upload audio directly to Cloudinary
+      const audioUploadData = await uploadToCloudinary(audioFile, audioSigData, 'applemusic/audio')
+      const audioUrl = audioUploadData.secure_url
+
+      let coverUrl = ''
+      // 3. Upload cover art if selected
+      if (coverFile) {
+        setMessage('Uploading artwork...')
+        const coverSigRes = await fetch('/api/songs/cover-signature', {
+          headers: { Authorization: `Bearer ${currentUser?.token}` }
+        })
+        if (!coverSigRes.ok) throw new Error('Failed to get artwork signature')
+        const coverSigData = await coverSigRes.json()
+
+        const coverUploadData = await uploadToCloudinary(coverFile, coverSigData, 'applemusic/images')
+        coverUrl = coverUploadData.secure_url
+      }
+
+      // 4. Save to our database
+      setMessage('Saving to library...')
       const res = await fetch('/api/songs/upload', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${currentUser?.token}` },
-        body: form
+        headers: { 
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentUser?.token}` 
+        },
+        body: JSON.stringify({
+          ...formData,
+          duration,
+          audioUrl,
+          coverUrl
+        })
       })
+
       if (res.ok) {
         setMessage('Song uploaded successfully! It is now available in your library.')
         setIsError(false)
@@ -102,8 +153,7 @@ export default function UploadPage() {
         removeCover()
       } else {
         const error = await res.json()
-        setMessage(error.message || 'Upload failed')
-        setIsError(true)
+        throw new Error(error.message || 'Database save failed')
       }
     } catch (err) {
       setMessage('Upload error: ' + err.message)
