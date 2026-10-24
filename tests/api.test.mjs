@@ -7,6 +7,14 @@ import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
+// Integration tests never use developer Cloudinary credentials.
+for (const key of [
+  "CLOUDINARY_URL",
+  "CLOUDINARY_CLOUD_NAME",
+  "CLOUDINARY_API_KEY",
+  "CLOUDINARY_API_SECRET",
+])
+  process.env[key] = "";
 const dir = mkdtempSync(join(tmpdir(), "music-max-api-")),
   name = "music_max_test_" + randomBytes(5).toString("hex");
 const mongoExists =
@@ -385,6 +393,117 @@ check(
       ).status,
       404,
     );
+  },
+);
+check(
+  "signed Cloudinary requests use server credentials and verify uploaded ownership",
+  async () => {
+    const { cloudinary } = require("../backend/config/cloudinary");
+    const previous = { ...cloudinary.config() };
+    const originalResource = cloudinary.api.resource;
+    const User = require("../backend/models/User");
+    const aliceId = String(
+      (await User.findOne({ email: "alice@example.test" }))._id,
+    );
+    const audioId = `applemusic/audio/${aliceId}/test-recording`;
+    const coverId = `applemusic/images/${aliceId}/test-cover`;
+    cloudinary.config({
+      cloud_name: "fixture-cloud",
+      api_key: "fixture-key",
+      api_secret: "fixture-secret",
+    });
+    try {
+      const health = await request("/health");
+      assert.equal(health.body.uploads, true);
+      const signed = await request("/songs/signature", { user: alice });
+      assert.equal(signed.status, 200);
+      assert.equal(signed.body.folder, `applemusic/audio/${aliceId}`);
+      assert.equal(signed.body.apiKey, "fixture-key");
+      assert.equal(
+        signed.body.signature,
+        cloudinary.utils.api_sign_request(
+          { timestamp: signed.body.timestamp, folder: signed.body.folder },
+          "fixture-secret",
+        ),
+      );
+      assert.equal(
+        JSON.stringify(signed.body).includes("fixture-secret"),
+        false,
+      );
+      const image = await request("/songs/cover-signature", { user: alice });
+      assert.equal(image.body.folder, `applemusic/images/${aliceId}`);
+      const seen = [];
+      cloudinary.api.resource = async (id, options) => {
+        seen.push([id, options.resource_type]);
+        return options.resource_type === "video"
+          ? {
+              audio: { codec: "mp3" },
+              duration: 48,
+              secure_url:
+                "https://res.cloudinary.com/fixture-cloud/video/upload/test-recording.mp3",
+            }
+          : {
+              secure_url:
+                "https://res.cloudinary.com/fixture-cloud/image/upload/test-cover.jpg",
+            };
+      };
+      const body = {
+        title: "Cloud test recording",
+        artistName: "Test performer",
+        albumTitle: "Cloud test album",
+        genre: "Electronic",
+        releaseYear: "2026",
+        audioPublicId: audioId,
+        coverPublicId: coverId,
+      };
+      assert.equal(
+        (await request("/songs/upload", { user: bob, method: "POST", body }))
+          .status,
+        403,
+      );
+      assert.equal(seen.length, 0);
+      const created = await request("/songs/upload", {
+        user: alice,
+        method: "POST",
+        body: {
+          ...body,
+          audioUrl: "https://untrusted.example/forged.mp3",
+          duration: 999,
+        },
+      });
+      assert.equal(created.status, 201);
+      assert.equal(created.body.duration, 48);
+      assert.match(created.body.audioUrl, /^https:\/\/res\.cloudinary\.com\//);
+      assert.equal(
+        created.body.coverUrl,
+        "https://res.cloudinary.com/fixture-cloud/image/upload/test-cover.jpg",
+      );
+      assert.deepEqual(seen, [
+        [audioId, "video"],
+        [coverId, "image"],
+      ]);
+      assert.equal(
+        (
+          await request("/songs/" + created.body._id, {
+            user: bob,
+            method: "DELETE",
+          })
+        ).status,
+        404,
+      );
+      assert.equal(
+        (
+          await request("/songs/" + created.body._id, {
+            user: alice,
+            method: "DELETE",
+          })
+        ).status,
+        200,
+      );
+    } finally {
+      cloudinary.api.resource = originalResource;
+      cloudinary.config(previous);
+    }
   },
 );
 check(

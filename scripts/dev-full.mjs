@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
+require("../backend/config/env.js");
 const children = [];
 let stopping = false;
 function stop() {
@@ -49,6 +50,7 @@ process.env.MONGODB_URI = external || "mongodb://127.0.0.1:27029/music-max";
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || randomBytes(48).toString("hex");
 process.env.PORT = process.env.PORT || "5001";
+process.env.VITE_BACKEND_MODE = "enabled";
 try {
   const { connect } = require("../backend/server.js");
   await connect();

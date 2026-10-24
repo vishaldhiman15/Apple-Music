@@ -13,13 +13,14 @@ npm run dev
 
 Open `http://127.0.0.1:3000`. The browser library works immediately: 24 original instrumental demo recordings, 12 albums, six fictional artists, device playlists, favorites, and local audio imports. No account or API key is required.
 
-For the full stack, install MongoDB so `mongod` is on your PATH, then run:
+For the full stack with a local MongoDB service on port 27017, run:
 
 ```sh
+npm run setup:local
 npm run dev:full
 ```
 
-This starts an isolated local MongoDB on port 27029, seeds the demo catalog, starts the API on port 5001, and starts Vite on port 3000. Data stays in `.local/mongo`. The development JWT signing secret is generated in memory, so accounts persist but sessions expire when this command restarts. Set a stable, strong `JWT_SECRET` in your environment to retain sessions. Stop the command with Ctrl+C to close its child processes.
+`setup:local` creates a git-ignored, owner-readable `backend/.env` with a persistent signing secret and `mongodb://127.0.0.1:27017/music-max`. It preserves existing values. The frontend calls `/api` through the Vite proxy, so accounts, favorites, and cloud playlists use this MongoDB database. Without a configured MongoDB URI, `dev:full` instead starts an isolated local MongoDB on port 27029, seeds the demo catalog, starts the API on port 5001, and starts Vite on port 3000. Data stays in `.local/mongo`. When no signing secret is configured, the development launcher generates one in memory, so sessions expire when that command restarts. The local setup command supplies a persistent secret. Stop the command with Ctrl+C to close its child processes.
 
 To use an existing database, export `MONGODB_URI` before running `dev:full`. For a separately managed server, copy `backend/.env.example` to `backend/.env`, set its values, then run `npm run seed` and `npm run server`. Start the frontend with `npm run dev` in another terminal. Never commit `.env` files.
 
@@ -35,6 +36,26 @@ To use an existing database, export `MONGODB_URI` before running `dev:full`. For
 - Real account registration/login, cookie sessions, private MongoDB playlists and favorites, profile editing, and optional signed Cloudinary uploads. Invalid credentials never fall back to a fake account.
 
 Guest and signed-in device libraries are stored in separate account scopes. Guest data is not automatically transferred to an account. Device playlists and imported favorites remain local even when signed in; cloud playlists accept server recordings. Cloud uploads become part of the shared catalog for all users of that deployment. Only the uploader can delete their cloud track through the API. Deleting a track removes its database references; Cloudinary asset cleanup is a separate provider lifecycle task.
+
+## Connect Cloudinary locally
+
+Add your Cloudinary account values to `backend/.env` (never `VITE_*`):
+
+```dotenv
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+```
+
+Alternatively, set `CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME` in the same file. Get these values from the Cloudinary Console’s API Keys settings. Restart `dev:full` after changing them, then run:
+
+```sh
+npm run services:check
+```
+
+This verifies MongoDB with a database ping and Cloudinary with an authenticated provider ping, without printing credentials or creating uploads. Sign in to the local app and choose **Import music → Cloud library** to upload audio and optional artwork. The backend signs requests, keeps the secret server-side, checks ownership, verifies the provider’s uploaded resource, and saves its HTTPS URLs in MongoDB. Missing credentials leave device imports usable and cloud upload controls disabled.
+
+A hosted static demo cannot reach your computer’s local MongoDB; use the local frontend at `http://127.0.0.1:3000` for this setup.
 
 ## Production
 

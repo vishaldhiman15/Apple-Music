@@ -1,4 +1,4 @@
-require("dotenv").config({ path: __dirname + "/.env", quiet: true });
+require("./config/env");
 const express = require("express"),
   mongoose = require("mongoose"),
   cors = require("cors"),
@@ -52,20 +52,16 @@ app.get("/api/health", (req, res) =>
     ok: true,
     database:
       mongoose.connection.readyState === 1 ? "connected" : "unavailable",
-    uploads: Boolean(
-      process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_SECRET,
-    ),
+    uploads: require("./config/cloudinary").configured(),
   }),
 );
 app.use("/api", (req, res, next) =>
   mongoose.connection.readyState === 1
     ? next()
-    : res
-        .status(503)
-        .json({
-          message:
-            "Account sync is unavailable. Your device library still works.",
-        }),
+    : res.status(503).json({
+        message:
+          "Account sync is unavailable. Your device library still works.",
+      }),
 );
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/songs", require("./routes/songRoutes"));
@@ -76,13 +72,11 @@ app.use("/api", (req, res) =>
 );
 app.use((err, req, res, next) => {
   if (err instanceof z.ZodError)
-    return res
-      .status(400)
-      .json({
-        message: err.issues
-          .map((i) => i.path.join(".") + ": " + i.message)
-          .join("; "),
-      });
+    return res.status(400).json({
+      message: err.issues
+        .map((i) => i.path.join(".") + ": " + i.message)
+        .join("; "),
+    });
   if (err.status) return res.status(err.status).json({ message: err.message });
   if (err.code === 11000)
     return res.status(409).json({ message: "That record already exists." });

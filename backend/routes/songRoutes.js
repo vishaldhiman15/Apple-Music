@@ -32,10 +32,10 @@ function sign(req, res, type) {
     ...params,
     signature: cloudinary.utils.api_sign_request(
       params,
-      process.env.CLOUDINARY_API_SECRET,
+      cloudinary.config().api_secret,
     ),
-    cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
+    cloudName: cloudinary.config().cloud_name,
+    apiKey: cloudinary.config().api_key,
   });
 }
 router.get(
