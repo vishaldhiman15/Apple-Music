@@ -1,23 +1,27 @@
-const mongoose = require('mongoose')
-const bcrypt = require('bcryptjs')
-
-const userSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  avatar: { type: String, default: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest' },
-  favourites: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Song' }],
-  recentlyPlayed: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Album' }],
-  topPicks: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Album' }] // Assuming topPicks are albums/playlists
-}, { timestamps: true })
-
-userSchema.pre('save', async function() {
-  if (!this.isModified('password')) return
-  this.password = await bcrypt.hash(this.password, 10)
-})
-
-userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password)
-}
-
-module.exports = mongoose.model('User', userSchema)
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const schema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true, maxLength: 60 },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: { type: String, required: true, select: false },
+    avatar: { type: String, default: "" },
+    favourites: [{ type: mongoose.Schema.Types.ObjectId, ref: "Song" }],
+    recentlyPlayed: [{ type: mongoose.Schema.Types.ObjectId, ref: "Album" }],
+  },
+  { timestamps: true },
+);
+schema.pre("save", async function () {
+  if (this.isModified("password"))
+    this.password = await bcrypt.hash(this.password, 12);
+});
+schema.methods.matchPassword = function (value) {
+  return bcrypt.compare(value, this.password);
+};
+module.exports = mongoose.model("User", schema);

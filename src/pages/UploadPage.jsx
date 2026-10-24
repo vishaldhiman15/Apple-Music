@@ -1,342 +1,501 @@
-import { useState, useRef } from 'react'
-import { useAuthStore } from '../store/useAuthStore'
-import { UploadCloud, Music, Image as ImageIcon, X, Check, Loader2 } from 'lucide-react'
-
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Upload,
+  Music2,
+  ImagePlus,
+  X,
+  Check,
+  Loader2,
+  HardDrive,
+  Cloud,
+  ShieldCheck,
+  FileAudio,
+  ArrowUpRight,
+} from "lucide-react";
+import { useDataStore } from "../store/useDataStore";
+import { useAuthStore } from "../store/useAuthStore";
+import { useUIStore } from "../store/useUIStore";
+import { api } from "../lib/api";
+import { formatDuration } from "../utils/helpers";
+import { IconButton } from "../components/UI";
+const ALLOWED = /\.(mp3|wav|m4a|aac|ogg|opus|flac|webm|mp4)$/i;
 export default function UploadPage() {
-  const currentUser = useAuthStore(state => state.currentUser)
-  const [formData, setFormData] = useState({
-    title: '',
-    artistName: '',
-    albumTitle: '',
-    genre: '',
-    releaseYear: new Date().getFullYear().toString(),
-    explicit: false
-  })
-  const [duration, setDuration] = useState(null)
-  
-  const [audioFile, setAudioFile] = useState(null)
-  const [coverFile, setCoverFile] = useState(null)
-  const [coverPreview, setCoverPreview] = useState(null)
-  
-  const [loading, setLoading] = useState(false)
-  const [message, setMessage] = useState('')
-  const [isError, setIsError] = useState(false)
-
-  const audioInputRef = useRef(null)
-  const coverInputRef = useRef(null)
-
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target
-    setFormData({ ...formData, [name]: type === 'checkbox' ? checked : value })
-  }
-
-  const handleAudioChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setAudioFile(file)
-      // Extract duration
-      const url = URL.createObjectURL(file)
-      const audio = new Audio(url)
-      audio.addEventListener('loadedmetadata', () => {
-        setDuration(Math.round(audio.duration))
-        URL.revokeObjectURL(url)
-      })
+  const nav = useNavigate();
+  const user = useAuthStore((s) => s.currentUser);
+  const [file, setFile] = useState(null),
+    [cover, setCover] = useState(null),
+    [coverUrl, setCoverUrl] = useState(""),
+    [duration, setDuration] = useState(0),
+    [busy, setBusy] = useState(false),
+    [drag, setDrag] = useState(false),
+    [error, setError] = useState(""),
+    [progress, setProgress] = useState(""),
+    [target, setTarget] = useState("device"),
+    [cloud, setCloud] = useState(false);
+  const [fields, setFields] = useState({
+    title: "",
+    artist: "",
+    albumTitle: "My Collection",
+    genre: "Electronic",
+    releaseYear: String(new Date().getFullYear()),
+    lyrics: "",
+    instrumental: false,
+  });
+  const input = useRef();
+  useEffect(() => {
+    if (user)
+      api("/health")
+        .then((h) => setCloud(h.uploads))
+        .catch(() => {});
+  }, [user]);
+  useEffect(() => {
+    if (!cover) {
+      setCoverUrl("");
+      return;
     }
-  }
-
-  const handleCoverChange = (e) => {
-    const file = e.target.files[0]
-    if (file) {
-      setCoverFile(file)
-      const url = URL.createObjectURL(file)
-      setCoverPreview(url)
-    }
-  }
-
-  const removeAudio = () => {
-    setAudioFile(null)
-    setDuration(null)
-    if (audioInputRef.current) audioInputRef.current.value = ''
-  }
-
-  const removeCover = () => {
-    setCoverFile(null)
-    setCoverPreview(null)
-    if (coverInputRef.current) coverInputRef.current.value = ''
-  }
-
-  const uploadToCloudinary = async (file, signatureData, folder) => {
-    const form = new FormData()
-    form.append('file', file)
-    form.append('api_key', signatureData.apiKey)
-    form.append('timestamp', signatureData.timestamp)
-    form.append('signature', signatureData.signature)
-    form.append('folder', folder)
-
-    const res = await fetch(`https://api.cloudinary.com/v1_1/${signatureData.cloudName}/auto/upload`, {
-      method: 'POST',
-      body: form
-    })
-    
-    if (!res.ok) {
-      const errText = await res.text()
-      try {
-        const err = JSON.parse(errText)
-        throw new Error(err.error?.message || 'Cloudinary upload failed')
-      } catch (e) {
-        throw new Error(`Cloudinary Error: ${errText.substring(0, 100)}`)
+    const url = URL.createObjectURL(cover);
+    setCoverUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [cover]);
+  useEffect(() => {
+    if (!file) return;
+    let alive = true;
+    setDuration(0);
+    const url = URL.createObjectURL(file),
+      a = new Audio();
+    const timer = setTimeout(() => {
+      if (alive && !a.duration)
+        setError(
+          "The file could not be decoded. Try an MP3, WAV, or M4A recording.",
+        );
+    }, 10000);
+    a.onloadedmetadata = () => {
+      if (alive) {
+        if (!Number.isFinite(a.duration) || a.duration <= 0)
+          setError("Choose a finite audio recording.");
+        else setDuration(a.duration);
       }
+    };
+    a.onerror = () =>
+      alive &&
+      setError(
+        "This browser cannot decode that audio file. Try MP3, WAV, or M4A.",
+      );
+    a.src = url;
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      a.removeAttribute("src");
+      a.load();
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+  function choose(f) {
+    if (!f) return;
+    if (!ALLOWED.test(f.name)) {
+      setError(
+        "Choose an MP3, WAV, M4A, AAC, OGG, Opus, FLAC, or WebM audio file.",
+      );
+      return;
     }
-    return await res.json()
+    if (f.size > 100 * 1024 * 1024) {
+      setError("Please choose an audio file under 100 MB.");
+      return;
+    }
+    setError("");
+    setFile(f);
+    setFields({
+      ...fields,
+      title: f.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " "),
+    });
   }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!audioFile) {
-      setMessage('Please select an audio file to upload.')
-      setIsError(true)
-      return
+  function field(e) {
+    setFields({
+      ...fields,
+      [e.target.name]:
+        e.target.type === "checkbox" ? e.target.checked : e.target.value,
+    });
+  }
+  async function cloudUpload(f, type) {
+    const signature = await api(
+      type === "audio" ? "/songs/signature" : "/songs/cover-signature",
+    );
+    const form = new FormData();
+    form.append("file", f);
+    for (const key of ["timestamp", "folder", "signature", "apiKey"])
+      form.append(key === "apiKey" ? "api_key" : key, signature[key]);
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${signature.cloudName}/${type === "audio" ? "video" : "image"}/upload`,
+      { method: "POST", body: form },
+    );
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.error?.message || "Cloud upload failed.");
+    return data.public_id;
+  }
+  async function submit(e) {
+    e.preventDefault();
+    setError("");
+    if (!file || !duration) {
+      setError("Choose a playable audio file first.");
+      return;
     }
-    if (!duration) {
-      setMessage('Still calculating audio duration. Please wait a moment and try again.')
-      setIsError(true)
-      return
+    if (!fields.title.trim() || !fields.artist.trim()) {
+      setError("Add a track title and artist.");
+      return;
     }
-
-    setLoading(true)
-    setMessage('Starting upload...')
-    setIsError(false)
-
+    setBusy(true);
     try {
-      // 1. Get audio signature
-      setMessage('Uploading audio...')
-      const audioSigRes = await fetch('/api/songs/signature', {
-        headers: { Authorization: `Bearer ${currentUser?.token}` }
-      })
-      if (!audioSigRes.ok) {
-        const t = await audioSigRes.text()
-        throw new Error(`Failed to get audio signature: ${t.substring(0, 60)}`)
-      }
-      const audioSigData = await audioSigRes.json()
-
-      // 2. Upload audio directly to Cloudinary
-      const audioUploadData = await uploadToCloudinary(audioFile, audioSigData, 'applemusic/audio')
-      const audioUrl = audioUploadData.secure_url
-
-      let coverUrl = ''
-      // 3. Upload cover art if selected
-      if (coverFile) {
-        setMessage('Uploading artwork...')
-        const coverSigRes = await fetch('/api/songs/cover-signature', {
-          headers: { Authorization: `Bearer ${currentUser?.token}` }
-        })
-        if (!coverSigRes.ok) {
-          const t = await coverSigRes.text()
-          throw new Error(`Failed to get artwork signature: ${t.substring(0, 60)}`)
+      if (target === "cloud") {
+        setProgress("Uploading audio…");
+        const audioPublicId = await cloudUpload(file, "audio");
+        let coverPublicId;
+        if (cover) {
+          setProgress("Uploading artwork…");
+          coverPublicId = await cloudUpload(cover, "images");
         }
-        const coverSigData = await coverSigRes.json()
-
-        const coverUploadData = await uploadToCloudinary(coverFile, coverSigData, 'applemusic/images')
-        coverUrl = coverUploadData.secure_url
-      }
-
-      // 4. Save to our database
-      setMessage('Saving to library...')
-      const res = await fetch('/api/songs/upload', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${currentUser?.token}` 
-        },
-        body: JSON.stringify({
-          ...formData,
-          duration,
-          audioUrl,
-          coverUrl
-        })
-      })
-
-      if (res.ok) {
-        setMessage('Song uploaded successfully! It is now available in your library.')
-        setIsError(false)
-        setFormData({ title: '', artistName: '', albumTitle: '', genre: '', releaseYear: new Date().getFullYear().toString(), explicit: false })
-        removeAudio()
-        removeCover()
+        setProgress("Adding to your library…");
+        await api("/songs/upload", {
+          method: "POST",
+          body: {
+            ...fields,
+            artistName: fields.artist,
+            audioPublicId,
+            coverPublicId,
+          },
+        });
+        await useDataStore.getState().fetchCatalog();
       } else {
-        const errorText = await res.text()
-        try {
-          const error = JSON.parse(errorText)
-          throw new Error(error.message || 'Database save failed')
-        } catch (e) {
-          throw new Error(`Database save failed: ${errorText.substring(0, 100)}`)
-        }
+        setProgress("Saving your recording on this device…");
+        await useDataStore
+          .getState()
+          .importTrack({
+            audio: file,
+            cover,
+            metadata: {
+              ...fields,
+              albumTitle: fields.albumTitle.trim() || "My Collection",
+              duration,
+              instrumental: fields.instrumental,
+              mime: file.type,
+            },
+          });
       }
-    } catch (err) {
-      setMessage('Upload error: ' + err.message)
-      setIsError(true)
+      useUIStore.getState().notify("Your music is right where it belongs.");
+      nav("/library/songs");
+    } catch (e) {
+      setError(e.message);
     } finally {
-      setLoading(false)
+      setBusy(false);
+      setProgress("");
     }
   }
-
-  if (!currentUser) return <div className="p-10 text-am-text text-center text-xl font-medium">Please log in to upload music.</div>
-
   return (
-    <div className="min-h-full p-8 max-w-4xl mx-auto animate-fade-in relative">
-      <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-am-red/5 rounded-full blur-[100px] pointer-events-none mix-blend-screen" />
-      <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-500/5 rounded-full blur-[100px] pointer-events-none mix-blend-screen" />
-      
-      <div className="relative z-10">
-        <h1 className="text-4xl font-bold text-am-text mb-2 tracking-tight">Upload Music</h1>
-        <p className="text-am-text-secondary mb-10 text-lg">Add your favorite tracks to your personal library.</p>
-        
-        {message && (
-          <div className={`mb-8 p-4 rounded-xl flex items-center gap-3 backdrop-blur-md border ${isError ? 'bg-red-500/10 border-red-500/20 text-red-200' : 'bg-green-500/10 border-green-500/20 text-green-200'}`}>
-            {isError ? <X size={20} /> : <Check size={20} />}
-            <span className="font-medium">{message}</span>
+    <div className="page-container upload-page">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">YOUR MUSIC. YOUR SPACE.</span>
+          <h1>
+            Bring your own soundtrack<span className="heading-dot">.</span>
+          </h1>
+          <p>
+            A favorite recording, an old mix, something you made. Give it a
+            home.
+          </p>
+        </div>
+        <Upload size={27} />
+      </header>
+      <form className="import-layout" onSubmit={submit}>
+        <div>
+          <input
+            ref={input}
+            type="file"
+            accept="audio/*,.m4a,.flac,.opus"
+            hidden
+            onChange={(e) => choose(e.target.files?.[0])}
+          />
+          <div
+            className={
+              "drop-zone " +
+              (drag ? "dragging" : "") +
+              (file ? " has-file" : "")
+            }
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDrag(true);
+            }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              choose(e.dataTransfer.files?.[0]);
+            }}
+          >
+            {file ? (
+              <>
+                <FileAudio size={51} />
+                <h2>{file.name}</h2>
+                <p>
+                  {duration ? formatDuration(duration) : "Reading audio…"} ·{" "}
+                  {(file.size / 1024 / 1024).toFixed(1)} MB
+                </p>
+                <button
+                  type="button"
+                  className="btn secondary"
+                  onClick={() => input.current.click()}
+                >
+                  Choose a different track
+                </button>
+              </>
+            ) : (
+              <>
+                <span className="drop-icon">
+                  <Music2 size={47} />
+                  <PlusBadge />
+                </span>
+                <h2>Drop a little music here.</h2>
+                <p>
+                  Drag an audio file into this space,
+                  <br />
+                  or choose one from your device.
+                </p>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => input.current.click()}
+                >
+                  Choose audio file
+                </button>
+                <small>MP3, WAV, M4A, AAC, OGG, FLAC · up to 100 MB</small>
+              </>
+            )}
           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-8">
-          
-          {/* Left Column - Media Uploads */}
-          <div className="col-span-1 md:col-span-4 space-y-6">
-            {/* Cover Art Upload */}
+          <div className="import-note">
+            <ShieldCheck size={22} />
             <div>
-              <label className="block text-sm font-semibold text-am-text mb-3 uppercase tracking-wider text-xs">Artwork</label>
-              <div 
-                onClick={() => coverInputRef.current?.click()}
-                className="w-full aspect-square bg-white/5 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-white/10 hover:border-am-red/50 transition-all group overflow-hidden relative shadow-xl shadow-black/20"
-              >
-                {coverPreview ? (
-                  <>
-                    <img src={coverPreview} alt="Cover Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-white font-medium text-sm">Change Image</span>
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={(e) => { e.stopPropagation(); removeCover(); }}
-                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-am-red rounded-full text-white backdrop-blur-md transition-colors"
-                    >
-                      <X size={16} />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
-                      <ImageIcon size={28} className="text-am-text-muted group-hover:text-am-text transition-colors" />
-                    </div>
-                    <span className="text-am-text-secondary text-sm font-medium">Select Cover Art</span>
-                    <span className="text-am-text-muted text-xs mt-1">(Optional)</span>
-                  </>
-                )}
-              </div>
-              <input ref={coverInputRef} type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+              <b>
+                {target === "device"
+                  ? "It stays close to home."
+                  : "Ready for your connected library."}
+              </b>
+              <p>
+                {target === "device"
+                  ? "Device imports are stored in your browser and can play offline. Clearing browser data removes those copies."
+                  : "Cloud uploads are visible in the shared catalog. Only upload recordings you have permission to share."}
+              </p>
             </div>
-
-            {/* Audio Upload */}
+          </div>
+        </div>
+        <div className="import-fields">
+          <div className="storage-options">
+            <button
+              type="button"
+              className={target === "device" ? "selected" : ""}
+              onClick={() => setTarget("device")}
+            >
+              <HardDrive size={17} />
+              <span>
+                On this device<small>Private · offline ready</small>
+              </span>
+              {target === "device" && <Check size={15} />}
+            </button>
+            <button
+              type="button"
+              disabled={!user || !cloud}
+              className={target === "cloud" ? "selected" : ""}
+              onClick={() => setTarget("cloud")}
+            >
+              <Cloud size={17} />
+              <span>
+                Cloud library
+                <small>
+                  {!user
+                    ? "Sign in to enable"
+                    : !cloud
+                      ? "Not connected"
+                      : "Share with your catalog"}
+                </small>
+              </span>
+              {target === "cloud" && <Check size={15} />}
+            </button>
+          </div>
+          <div className="cover-upload">
+            <label
+              className="cover-picker"
+              tabIndex={0}
+              role="button"
+              aria-label="Choose cover artwork"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.currentTarget.querySelector("input").click();
+                }
+              }}
+            >
+              {coverUrl ? (
+                <img src={coverUrl} alt="Selected cover" />
+              ) : (
+                <ImagePlus size={30} />
+              )}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (
+                    !["image/jpeg", "image/png", "image/webp"].includes(
+                      f.type,
+                    ) ||
+                    f.size > 8 * 1024 * 1024
+                  ) {
+                    setError("Choose a JPEG, PNG, or WebP cover under 8 MB.");
+                    return;
+                  }
+                  setCover(f);
+                }}
+              />
+            </label>
             <div>
-              <label className="block text-sm font-semibold text-am-text mb-3 uppercase tracking-wider text-xs">Audio File</label>
-              <div 
-                onClick={() => !audioFile && audioInputRef.current?.click()}
-                className={`w-full p-6 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all shadow-xl shadow-black/20
-                  ${audioFile ? 'bg-am-red/10 border-am-red/30 cursor-default' : 'bg-white/5 border-white/10 cursor-pointer hover:bg-white/10 hover:border-am-red/50 group'}`}
-              >
-                {audioFile ? (
-                  <div className="w-full flex items-center justify-between">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                      <div className="w-10 h-10 rounded-full bg-am-red flex items-center justify-center flex-shrink-0 shadow-lg shadow-am-red/20">
-                        <Music size={20} className="text-white" />
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-am-text font-medium text-sm truncate block">{audioFile.name}</span>
-                        <span className="text-am-text-muted text-xs block">{duration ? `${Math.floor(duration/60)}:${(duration%60).toString().padStart(2, '0')}` : 'Calculating duration...'}</span>
-                      </div>
-                    </div>
-                    <button 
-                      type="button" 
-                      onClick={removeAudio}
-                      className="p-2 text-am-text-muted hover:text-am-red hover:bg-white/10 rounded-full transition-colors flex-shrink-0 ml-2"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <UploadCloud size={32} className="text-am-text-muted group-hover:text-am-text mb-3 transition-colors" />
-                    <span className="text-am-text-secondary text-sm font-medium">Select Audio File</span>
-                    <span className="text-am-text-muted text-xs mt-1">MP3, WAV, AAC</span>
-                  </>
-                )}
-              </div>
-              <input ref={audioInputRef} type="file" accept="audio/*" onChange={handleAudioChange} className="hidden" />
+              <b>Give it a cover.</b>
+              <p>JPG, PNG, or WebP. Optional, but a nice touch.</p>
+              {cover && (
+                <button
+                  type="button"
+                  className="small-link"
+                  onClick={() => setCover(null)}
+                >
+                  Remove artwork
+                </button>
+              )}
             </div>
           </div>
-
-          {/* Right Column - Details Form */}
-          <div className="col-span-1 md:col-span-8 bg-white/5 border border-white/10 rounded-3xl p-8 backdrop-blur-2xl shadow-2xl shadow-black/40">
-            <h3 className="text-xl font-semibold text-am-text mb-6 pb-4 border-b border-white/10">Track Details</h3>
-            
-            <div className="space-y-5">
-              <div>
-                <label className="block text-xs font-semibold text-am-text-muted mb-2 uppercase tracking-wider">Song Title *</label>
-                <input required name="title" value={formData.title} onChange={handleChange} placeholder="e.g. Blinding Lights" className="w-full bg-black/20 border border-white/10 focus:border-am-red rounded-xl p-3.5 text-am-text placeholder-white/20 outline-none transition-colors text-base" />
-              </div>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-semibold text-am-text-muted mb-2 uppercase tracking-wider">Artist Name *</label>
-                  <input required name="artistName" value={formData.artistName} onChange={handleChange} placeholder="e.g. The Weeknd" className="w-full bg-black/20 border border-white/10 focus:border-am-red rounded-xl p-3.5 text-am-text placeholder-white/20 outline-none transition-colors text-base" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-am-text-muted mb-2 uppercase tracking-wider">Album Title *</label>
-                  <input required name="albumTitle" value={formData.albumTitle} onChange={handleChange} placeholder="e.g. After Hours" className="w-full bg-black/20 border border-white/10 focus:border-am-red rounded-xl p-3.5 text-am-text placeholder-white/20 outline-none transition-colors text-base" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-semibold text-am-text-muted mb-2 uppercase tracking-wider">Genre</label>
-                  <input name="genre" value={formData.genre} onChange={handleChange} placeholder="e.g. Synth-pop" className="w-full bg-black/20 border border-white/10 focus:border-am-red rounded-xl p-3.5 text-am-text placeholder-white/20 outline-none transition-colors text-base" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-am-text-muted mb-2 uppercase tracking-wider">Release Year</label>
-                  <input type="number" name="releaseYear" value={formData.releaseYear} onChange={handleChange} placeholder="YYYY" className="w-full bg-black/20 border border-white/10 focus:border-am-red rounded-xl p-3.5 text-am-text placeholder-white/20 outline-none transition-colors text-base" />
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="relative flex items-center">
-                    <input type="checkbox" name="explicit" checked={formData.explicit} onChange={handleChange} className="peer sr-only" />
-                    <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-am-red transition-colors shadow-inner"></div>
-                  </div>
-                  <div>
-                    <span className="text-am-text font-medium text-sm block">Explicit Content</span>
-                    <span className="text-am-text-muted text-xs block">Indicates parental advisory</span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            <div className="mt-10 pt-6 border-t border-white/10 flex justify-end">
-              <button 
-                type="submit" 
-                disabled={loading || !audioFile || !duration} 
-                className="px-8 py-3.5 bg-am-red hover:bg-am-red-hover text-white rounded-xl font-bold transition-all disabled:opacity-50 disabled:hover:scale-100 hover:scale-105 active:scale-95 flex items-center gap-2 shadow-lg shadow-am-red/20"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 size={18} className="animate-spin" />
-                    Uploading...
-                  </>
-                ) : 'Upload to Library'}
-              </button>
-            </div>
+          <div className="form-grid">
+            <label>
+              Track title
+              <input
+                name="title"
+                value={fields.title}
+                onChange={field}
+                required
+                maxLength={150}
+                placeholder="What’s it called?"
+              />
+            </label>
+            <label>
+              Artist
+              <input
+                name="artist"
+                value={fields.artist}
+                onChange={field}
+                required
+                maxLength={100}
+                placeholder="Who made it?"
+              />
+            </label>
+            <label>
+              Album
+              <input
+                name="albumTitle"
+                value={fields.albumTitle}
+                onChange={field}
+                maxLength={150}
+              />
+            </label>
+            <label>
+              Genre
+              <select name="genre" value={fields.genre} onChange={field}>
+                {[
+                  "Electronic",
+                  "Ambient",
+                  "Soul",
+                  "Jazz",
+                  "Lo-fi",
+                  "Classical",
+                  "Dance",
+                  "R&B",
+                  "Acoustic",
+                  "Pop",
+                  "Rock",
+                  "Hip-Hop",
+                  "Other",
+                ].map((g) => (
+                  <option key={g}>{g}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Year
+              <input
+                name="releaseYear"
+                value={fields.releaseYear}
+                onChange={field}
+                pattern="[0-9]{4}"
+                maxLength={4}
+              />
+            </label>
+            <label className="checkbox-label">
+              <input
+                type="checkbox"
+                name="instrumental"
+                checked={fields.instrumental}
+                onChange={field}
+              />
+              Instrumental recording
+            </label>
           </div>
-        </form>
-      </div>
+          <label>
+            Lyrics{" "}
+            <span className="optional">optional · plain text or LRC</span>
+            <textarea
+              name="lyrics"
+              value={fields.lyrics}
+              onChange={field}
+              rows={4}
+              maxLength={50000}
+              placeholder="[00:12.50] A line that comes in right on time…"
+            />
+          </label>
+          <label className="lrc-upload">
+            Have an LRC file?{" "}
+            <input
+              type="file"
+              accept=".lrc,.txt"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                if (f && f.size < 100000)
+                  setFields({ ...fields, lyrics: await f.text() });
+              }}
+            />
+          </label>
+          {error && (
+            <p className="form-error" role="alert">
+              {error}
+            </p>
+          )}
+          <button
+            className="btn primary full-width"
+            disabled={busy || !file || !duration}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="spin" size={17} />
+                {progress}
+              </>
+            ) : (
+              <>
+                <Upload size={16} />
+                Add to my library
+              </>
+            )}
+          </button>
+        </div>
+      </form>
     </div>
-  )
+  );
+}
+function PlusBadge() {
+  return <span>+</span>;
 }
