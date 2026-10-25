@@ -3,10 +3,11 @@ import { useDataStore } from "./useDataStore";
 import { readStorage, writeStorage } from "../lib/storage";
 import { selectNextIndex } from "../lib/catalog";
 import demo from "../data/catalog.json";
+import { createSoundGraph, normalizeSoundSettings } from "../lib/audioEngine";
 let audio,
   context,
   analyser,
-  bands = [],
+  audioGraph,
   sleepTimer,
   requestId = 0,
   playedId = null;
@@ -17,8 +18,26 @@ const settings = readStorage("music-player-settings", {
   eq: "flat",
 });
 function saveSettings() {
-  const { volume, repeat, shuffle, eq } = usePlayerStore.getState();
-  writeStorage("music-player-settings", { volume, repeat, shuffle, eq });
+  const { volume, repeat, shuffle, eq, soundMode, spatialWidth, roomAmount } =
+    usePlayerStore.getState();
+  writeStorage("music-player-settings", {
+    volume,
+    repeat,
+    shuffle,
+    eq,
+    soundMode,
+    spatialWidth,
+    roomAmount,
+  });
+}
+function applyVolume() {
+  if (!audio) return;
+  const state = usePlayerStore.getState(),
+    volume = state.muted ? 0 : state.volume;
+  if (audioGraph) {
+    audio.volume = 1;
+    audioGraph.output.gain.setTargetAtTime(volume, context.currentTime, 0.015);
+  } else audio.volume = volume;
 }
 function getAudio() {
   if (audio) return audio;
@@ -127,34 +146,22 @@ export function enableAudioGraph() {
     const a = getAudio();
     if (!context) {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
-      context = new AudioContext();
-      const source = context.createMediaElementSource(a);
-      const low = context.createBiquadFilter();
-      low.type = "lowshelf";
-      low.frequency.value = 180;
-      const mid = context.createBiquadFilter();
-      mid.type = "peaking";
-      mid.frequency.value = 1400;
-      mid.Q.value = 0.7;
-      const high = context.createBiquadFilter();
-      high.type = "highshelf";
-      high.frequency.value = 5000;
-      analyser = context.createAnalyser();
-      analyser.fftSize = 128;
-      source
-        .connect(low)
-        .connect(mid)
-        .connect(high)
-        .connect(analyser)
-        .connect(context.destination);
-      bands = [low, mid, high];
-      const gains = {
-        flat: [0, 0, 0],
-        warm: [4, -1, -2],
-        vocal: [-2, 4, 1],
-        bright: [-1, 0, 4],
-      }[usePlayerStore.getState().eq] || [0, 0, 0];
-      bands.forEach((b, i) => (b.gain.value = gains[i]));
+      if (!AudioContext) return false;
+      const candidate = new AudioContext();
+      let graph;
+      try {
+        graph = createSoundGraph(candidate, usePlayerStore.getState());
+      } catch (error) {
+        candidate.close().catch(() => {});
+        throw error;
+      }
+      const source = candidate.createMediaElementSource(a);
+      source.connect(graph.input);
+      graph.output.connect(candidate.destination);
+      context = candidate;
+      audioGraph = graph;
+      analyser = graph.analyser;
+      applyVolume();
     }
     context.resume().catch(() => {});
     return true;
@@ -179,7 +186,8 @@ const usePlayerStore = create((set, get) => ({
   duration: 48,
   shuffle: settings.shuffle,
   repeat: settings.repeat,
-  eq: settings.eq,
+  eq: settings.eq || "flat",
+  ...normalizeSoundSettings(settings),
   showNowPlaying: false,
   showLyrics: false,
   showQueue: false,
@@ -225,10 +233,21 @@ const usePlayerStore = create((set, get) => ({
       error: "",
     });
     a.src = song.audioUrl;
-    a.volume = get().muted ? 0 : get().volume;
+    applyVolume();
     updateMedia(song);
     writeStorage("music-last-track", song.id);
     try {
+      if (
+        (get().soundMode === "spatial" || get().eq !== "flat") &&
+        !enableAudioGraph()
+      ) {
+        set({
+          soundMode: "stereo",
+          eq: "flat",
+          error:
+            "Sound processing is unavailable in this browser. Stereo playback is ready.",
+        });
+      }
       if (context?.state === "suspended") await context.resume();
       await a.play();
       if (id !== requestId) return;
@@ -251,6 +270,17 @@ const usePlayerStore = create((set, get) => ({
       return;
     }
     try {
+      if (
+        (get().soundMode === "spatial" || get().eq !== "flat") &&
+        !enableAudioGraph()
+      ) {
+        set({
+          soundMode: "stereo",
+          eq: "flat",
+          error:
+            "Sound processing is unavailable in this browser. Stereo playback is ready.",
+        });
+      }
       if (context?.state === "suspended") await context.resume();
       await audio.play();
     } catch {
@@ -305,14 +335,14 @@ const usePlayerStore = create((set, get) => ({
   },
   setVolume: (value) => {
     const volume = Math.max(0, Math.min(1, Number(value) || 0));
-    if (audio) audio.volume = get().muted ? 0 : volume;
     set({ volume });
+    applyVolume();
     saveSettings();
   },
   toggleMute: () => {
     const muted = !get().muted;
-    if (audio) audio.volume = muted ? 0 : get().volume;
     set({ muted });
+    applyVolume();
   },
   toggleShuffle: () => {
     set({ shuffle: !get().shuffle });
@@ -329,16 +359,48 @@ const usePlayerStore = create((set, get) => ({
       set({ error: "Audio processing is unavailable in this browser." });
       return;
     }
-    const gains = {
-      flat: [0, 0, 0],
-      warm: [4, -1, -2],
-      vocal: [-2, 4, 1],
-      bright: [-1, 0, 4],
-    }[eq] || [0, 0, 0];
-    bands.forEach((b, i) =>
-      b.gain.setTargetAtTime(gains[i], context.currentTime, 0.15),
-    );
+    audioGraph.setEqualizer(eq);
     set({ eq });
+    saveSettings();
+  },
+  setSoundMode: (soundMode) => {
+    const next = normalizeSoundSettings({ ...get(), soundMode });
+    if (!enableAudioGraph()) {
+      set({ error: "Audio processing is unavailable in this browser." });
+      return;
+    }
+    audioGraph.update(next);
+    set({ ...next, error: "" });
+    saveSettings();
+  },
+  setSpatialWidth: (value) => {
+    const next = normalizeSoundSettings({ ...get(), spatialWidth: value });
+    if (!enableAudioGraph()) {
+      set({ error: "Audio processing is unavailable in this browser." });
+      return;
+    }
+    audioGraph.update(next);
+    set(next);
+    saveSettings();
+  },
+  setRoomAmount: (value) => {
+    const next = normalizeSoundSettings({ ...get(), roomAmount: value });
+    if (!enableAudioGraph()) {
+      set({ error: "Audio processing is unavailable in this browser." });
+      return;
+    }
+    audioGraph.update(next);
+    set(next);
+    saveSettings();
+  },
+  resetSpatial: () => {
+    const next = {
+      soundMode: get().soundMode,
+      spatialWidth: 0.65,
+      roomAmount: 0.25,
+    };
+    if (audioGraph) audioGraph.update(next);
+    set(next);
     saveSettings();
   },
   addToQueue: (song, next = false) => {

@@ -77,9 +77,10 @@ router.post(
       fail("Upload ownership could not be verified.", 403);
     const audio = await cloudinary.api.resource(data.audioPublicId, {
       resource_type: "video",
+      media_metadata: true,
     });
     if (
-      !audio.audio ||
+      (!audio.has_audio && !audio.audio_codec) ||
       !Number.isFinite(audio.duration) ||
       audio.duration <= 0 ||
       audio.duration > 86400

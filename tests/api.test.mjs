@@ -434,10 +434,13 @@ check(
       assert.equal(image.body.folder, `applemusic/images/${aliceId}`);
       const seen = [];
       cloudinary.api.resource = async (id, options) => {
+        if (options.resource_type === "video")
+          assert.equal(options.media_metadata, true);
         seen.push([id, options.resource_type]);
         return options.resource_type === "video"
           ? {
-              audio: { codec: "mp3" },
+              has_audio: true,
+              audio_codec: "mp3",
               duration: 48,
               secure_url:
                 "https://res.cloudinary.com/fixture-cloud/video/upload/test-recording.mp3",

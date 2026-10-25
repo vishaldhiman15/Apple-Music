@@ -20,6 +20,7 @@ import { useDataStore } from "../store/useDataStore";
 import { useUIStore } from "../store/useUIStore";
 import player from "../store/usePlayerStore";
 import { offlineIds, clearOffline } from "../lib/offline";
+import SoundControls from "../components/SoundControls";
 import { Brand } from "../components/UI";
 export default function SettingsPage() {
   const { currentUser, logout, updateProfile } = useAuthStore();
@@ -119,6 +120,7 @@ export default function SettingsPage() {
           </section>
           <section className="settings-card">
             <h2>Set the mood</h2>
+            <SoundControls compact />
             <div className="setting-row">
               <span>
                 <b>Appearance</b>

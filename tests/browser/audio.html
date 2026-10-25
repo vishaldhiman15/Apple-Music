@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><title>Audio processing verification</title
+  ><style>
+    body {
+      font: 16px system-ui;
+      max-width: 860px;
+      margin: 60px auto;
+      padding: 30px;
+      background: #16131b;
+      color: #eee;
+    }
+    button {
+      padding: 16px;
+      border: 0;
+      border-radius: 10px;
+      background: #f28eae;
+      color: #22131b;
+      font-weight: 600;
+    }
+    pre {
+      white-space: pre-wrap;
+      line-height: 1.8;
+    }
+    h1 {
+      letter-spacing: -1px;
+    }
+  </style>
+  <h1>Stereo & spatial audio verification</h1>
+  <p>Offline rendering exercises the same audio graph used by Music Max.</p>
+  <button id="run">Run audio checks</button>
+  <pre id="results" role="status">Ready.</pre>
+  <script type="module">
+    import { createSoundGraph } from "/audioEngine.js";
+    const status = document.getElementById("results");
+    const energy = (a, start = 0) =>
+      a.subarray(start).reduce((sum, x) => sum + x * x, 0);
+    async function render(
+      mode,
+      {
+        room = 0.25,
+        width = 0.65,
+        mono = false,
+        eq = "flat",
+        change = false,
+      } = {},
+    ) {
+      const ctx = new OfflineAudioContext(2, 24000, 48000),
+        graph = createSoundGraph(ctx, {
+          soundMode: mode,
+          spatialWidth: width,
+          roomAmount: room,
+          eq,
+        });
+      const buffer = ctx.createBuffer(mono ? 1 : 2, 1024, 48000),
+        left = buffer.getChannelData(0);
+      for (let i = 0; i < left.length; i++)
+        left[i] = 0.12 * Math.sin((2 * Math.PI * 440 * i) / 48000);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(graph.input);
+      graph.output.connect(ctx.destination);
+      if (change) {
+        graph.update({ soundMode: "spatial" }, true);
+        graph.update({ soundMode: "stereo" }, true);
+      }
+      source.start();
+      const rendered = await ctx.startRendering();
+      return [rendered.getChannelData(0), rendered.getChannelData(1)];
+    }
+    document.getElementById("run").onclick = async () => {
+      const rows = [];
+      status.textContent = "Rendering native Web Audio…";
+      const check = (name, condition) => {
+        rows.push(`${condition ? "PASS" : "FAIL"} — ${name}`);
+        if (!condition) throw Error(name);
+      };
+      try {
+        const stereo = await render("stereo");
+        check(
+          "Stereo preserves left-only input without right-channel leakage",
+          energy(stereo[0]) > 0.1 && energy(stereo[1]) < 1e-10,
+        );
+        const spatial = await render("spatial");
+        check(
+          "Spatial rendering produces both binaural output channels",
+          energy(spatial[0]) > 0.01 && energy(spatial[1]) > 0.001,
+        );
+        const narrow = await render("spatial", { width: 0 }),
+          wide = await render("spatial", { width: 1 });
+        check(
+          "Soundstage changes the rendered signal",
+          narrow[0].some((x, i) => Math.abs(x - wide[0][i]) > 1e-5),
+        );
+        const dry = await render("spatial", { room: 0 }),
+          room = await render("spatial", { room: 1 });
+        check(
+          "Room control adds a measurable delayed reflection",
+          energy(room[0], 2000) + energy(room[1], 2000) >
+            energy(dry[0], 2000) + energy(dry[1], 2000) + 1e-8,
+        );
+        const mono = await render("spatial", { mono: true });
+        check(
+          "Mono recordings reach both headphone channels",
+          energy(mono[0]) > 0.01 && energy(mono[1]) > 0.01,
+        );
+        const switched = await render("stereo", { change: true });
+        check(
+          "Returning to Stereo removes spatial crossfeed",
+          energy(switched[1]) < 1e-10,
+        );
+        const warm = await render("stereo", { eq: "warm" });
+        check(
+          "Equalizer changes audio samples",
+          warm[0].some((x, i) => Math.abs(x - stereo[0][i]) > 1e-5),
+        );
+        rows.push("7/7 checks passed.");
+      } catch (error) {
+        rows.push("ERROR: " + error.message);
+      }
+      status.textContent = rows.join("\n");
+    };
+  </script>
+</html>

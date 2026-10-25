@@ -18,6 +18,7 @@ import {
 import player, { enableAudioGraph, getAnalyser } from "../store/usePlayerStore";
 import { Cover, IconButton } from "./UI";
 import { Lyrics } from "./PlayerPanels";
+import SoundControls from "./SoundControls";
 import { formatDuration } from "../utils/helpers";
 function Visualizer() {
   const ref = useRef();
@@ -144,13 +145,19 @@ export default function NowPlaying() {
               <h1>{p.title}</h1>
               <p>{p.artist}</p>
             </div>
-            <span>
-              {p.demo
-                ? "ORIGINAL DEMO"
-                : p.local
-                  ? "YOUR RECORDING"
-                  : "LIBRARY TRACK"}
-            </span>
+            <button
+              className="audio-format-badge"
+              aria-label={
+                "Sound mode: " +
+                (s.soundMode === "spatial" ? "Spatial stereo" : "Stereo")
+              }
+              onClick={() => {
+                enableAudioGraph();
+                setTab("sound");
+              }}
+            >
+              {s.soundMode === "spatial" ? "SPATIAL STEREO" : "STEREO"}
+            </button>
           </div>
           <div className="now-seek">
             <input
@@ -217,9 +224,11 @@ export default function NowPlaying() {
             <Lyrics full />
           ) : tab === "sound" ? (
             <div className="sound-panel">
-              <span className="eyebrow">FIND YOUR BALANCE</span>
-              <h2>A little more feeling.</h2>
-              <p>Shape the sound to suit the moment.</p>
+              <span className="eyebrow">A NEW DIMENSION OF LISTENING</span>
+              <h2>Sound, all around you.</h2>
+              <p>Your mix. A little more room to move.</p>
+              <SoundControls />
+              <div className="sound-eq-label">TONE</div>
               <div className="eq-options">
                 {[
                   ["flat", "Balanced"],

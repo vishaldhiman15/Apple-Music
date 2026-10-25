@@ -37,6 +37,14 @@ To use an existing database, export `MONGODB_URI` before running `dev:full`. For
 
 Guest and signed-in device libraries are stored in separate account scopes. Guest data is not automatically transferred to an account. Device playlists and imported favorites remain local even when signed in; cloud playlists accept server recordings. Cloud uploads become part of the shared catalog for all users of that deployment. Only the uploader can delete their cloud track through the API. Deleting a track removes its database references; Cloudinary asset cleanup is a separate provider lifecycle task.
 
+## Stereo and spatial listening
+
+Open **Now Playing → Sound**, or use **Settings → Listening mode**. Stereo preserves the recording’s left/right mix. Spatial stereo renders those channels through fixed HRTF virtual speakers and adds adjustable, damped rear reflections for stereo headphones. Soundstage changes speaker positions; Room changes reflection gain. Tone presets, smooth mode transitions, output volume/mute, and a safety limiter share the same Web Audio graph. Preferences persist after reload and apply when you next press play.
+
+This is binaural processing of the available stereo recording. It does not decode Dolby Atmos, add head tracking, create discrete 5.1/7.1 source channels, or improve the source recording’s bitrate. For headphones already applying spatial processing in the operating system, use only one spatial processor at a time.
+
+`npm run test:audio` serves a developer-only browser test page at `http://127.0.0.1:4190`. Run its seven native OfflineAudioContext checks for stereo separation, binaural output, soundstage, reflections, mono upmix, returning to stereo, and EQ. The check page is outside the production bundle. These checks passed in the local Chromium browser; headphone perception and device-specific output quality still need listening checks on your hardware.
+
 ## Connect Cloudinary locally
 
 Add your Cloudinary account values to `backend/.env` (never `VITE_*`):

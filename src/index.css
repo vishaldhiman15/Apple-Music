@@ -1327,10 +1327,9 @@ input[type="range"]::-moz-range-thumb {
 .song-table-head,
 .track-row {
   display: grid;
-  grid-template-columns: 24px minmax(160px, 1.3fr) minmax(
-      90px,
-      1fr
-    ) 80px 30px 42px 28px;
+  grid-template-columns:
+    24px minmax(160px, 1.3fr) minmax(90px, 1fr)
+    80px 30px 42px 28px;
   gap: 13px;
   align-items: center;
 }
@@ -3462,10 +3461,9 @@ kbd {
   }
   .song-table-head,
   .track-row {
-    grid-template-columns: 20px minmax(150px, 1.5fr) minmax(
-        80px,
-        1fr
-      ) 30px 35px 25px;
+    grid-template-columns:
+      20px minmax(150px, 1.5fr) minmax(80px, 1fr)
+      30px 35px 25px;
     gap: 11px;
   }
   .song-genre {
@@ -3819,10 +3817,9 @@ kbd {
   }
   .song-table-head,
   .track-row {
-    grid-template-columns: 18px minmax(130px, 1.3fr) minmax(
-        70px,
-        1fr
-      ) 27px 31px 23px;
+    grid-template-columns:
+      18px minmax(130px, 1.3fr) minmax(70px, 1fr)
+      27px 31px 23px;
     gap: 8px;
   }
   .track-title {
@@ -5202,5 +5199,337 @@ kbd {
     animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Fixed binaural listening controls, shared by Settings and Now Playing. */
+.listening-controls {
+  --sound-border: var(--line);
+  --sound-copy: var(--ink);
+  --sound-muted: var(--secondary);
+  --sound-surface: var(--panel);
+  color: var(--sound-copy);
+}
+.listening-controls.immersive {
+  --sound-border: #ffffff26;
+  --sound-copy: #fff;
+  --sound-muted: #d4c7d2;
+  --sound-surface: #ffffff08;
+}
+.listening-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 22px;
+}
+.listening-modes > button {
+  position: relative;
+  text-align: left;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 16px 12px;
+  border: 1px solid var(--sound-border);
+  border-radius: 13px;
+  background: var(--sound-surface);
+  color: var(--sound-muted);
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+.listening-modes > button > span {
+  flex: 1;
+}
+.listening-modes b {
+  display: block;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--sound-copy);
+}
+.listening-modes small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.6;
+  margin-top: 3px;
+  max-width: 115px;
+}
+.listening-modes > button.selected {
+  border-color: #ed7295;
+  background: #e44e7a15;
+  color: #f28ca9;
+}
+.listening-modes > button.selected > svg:last-child {
+  position: absolute;
+  right: 9px;
+  top: 9px;
+  width: 12px;
+}
+.sound-space {
+  height: 164px;
+  position: relative;
+  display: grid;
+  place-items: center;
+  margin: 14px 0 0;
+  isolation: isolate;
+  overflow: hidden;
+}
+.sound-orbit {
+  position: absolute;
+  width: 68%;
+  height: 72%;
+  border: 1px solid #ffffff18;
+  border-radius: 50%;
+  transform: rotate(-15deg);
+}
+.sound-orbit.two {
+  width: 54%;
+  height: 88%;
+  transform: rotate(29deg);
+  border-color: #ffffff0e;
+}
+.sound-space.spatial {
+  background: radial-gradient(ellipse, #cf668c14, transparent 70%);
+}
+.sound-space.spatial .sound-orbit.one {
+  border-color: #ea90ae52;
+  box-shadow: 0 0 35px #ef6d9b0b;
+}
+.sound-listener {
+  width: 78px;
+  height: 78px;
+  background: linear-gradient(145deg, #ffffff13, #ffffff03);
+  border: 1px solid #ffffff28;
+  display: grid;
+  place-items: center;
+  border-radius: 24px;
+  box-shadow: 0 15px 40px #0002;
+  color: #f5eaf0;
+}
+.sound-source {
+  position: absolute;
+  top: 40%;
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ffffff15;
+  font-size: 9px;
+  color: #ddcdd7;
+}
+.sound-source.left {
+  left: var(--spread);
+}
+.sound-source.right {
+  right: var(--spread);
+}
+.sound-space.spatial .sound-source.left {
+  left: calc(49% - var(--spread));
+}
+.sound-space.spatial .sound-source.right {
+  right: calc(49% - var(--spread));
+}
+.sound-space.spatial .sound-source {
+  background: #f28ba728;
+  color: #ffbbd0;
+  box-shadow: 0 0 20px #ed72951a;
+}
+.sound-space-label {
+  position: absolute;
+  bottom: 3px;
+  font-size: 8px;
+  letter-spacing: 2.2px;
+  color: #c5afbda6;
+}
+.rear-dot {
+  position: absolute;
+  bottom: 30px;
+  width: 5px;
+  height: 5px;
+  background: #ef9db6;
+  border-radius: 50%;
+  opacity: 0.55;
+}
+.rear-dot.left {
+  left: 22%;
+}
+.rear-dot.right {
+  right: 22%;
+}
+.spatial-adjustments {
+  border: 1px solid var(--sound-border);
+  border-radius: 13px;
+  padding: 16px;
+  margin-top: 12px;
+  background: var(--sound-surface);
+}
+.sound-adjustment-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--sound-copy);
+  margin-bottom: 20px;
+}
+.sound-adjustment-heading button {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  font-size: 9px;
+  color: var(--sound-muted);
+}
+.spatial-adjustments label {
+  display: block;
+  margin: 0 0 18px;
+}
+.spatial-adjustments label > span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--sound-copy);
+  margin-bottom: 11px;
+}
+.spatial-adjustments output {
+  font-size: 10px;
+  color: var(--sound-muted);
+  font-variant-numeric: tabular-nums;
+}
+.spatial-adjustments input[type="range"] {
+  width: 100%;
+  accent-color: #ed7295;
+  background: #ffffff20;
+  height: 3px;
+}
+.spatial-adjustments label > small {
+  display: flex;
+  justify-content: space-between;
+  color: var(--sound-muted);
+  font-size: 9px;
+  margin-top: 10px;
+}
+.spatial-note {
+  font-size: 9px;
+  line-height: 1.8;
+  color: var(--sound-muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--sound-border);
+  margin: 0;
+}
+.sound-eq-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+  margin-top: 24px;
+  color: #bbaeb7;
+}
+.sound-panel .eq-options {
+  margin-top: 10px;
+  gap: 7px;
+}
+.sound-panel .eq-options > button {
+  padding: 10px;
+}
+.sound-panel .visualizer {
+  height: 52px;
+  margin-top: 13px;
+}
+.sound-panel .now-volume {
+  margin-top: 13px;
+}
+.now-playing:has(.sound-panel) .now-playing-body {
+  align-items: center;
+}
+.now-playing:has(.sound-panel) .now-playing-right {
+  max-width: 480px;
+}
+.listening-controls.compact {
+  margin-bottom: 22px;
+}
+.compact .listening-modes {
+  margin-top: 18px;
+}
+.compact .listening-modes > button {
+  min-height: 85px;
+}
+@media (max-width: 760px) {
+  .sound-space {
+    height: 145px;
+  }
+  .listening-modes > button {
+    padding: 15px 10px;
+  }
+  .listening-modes small {
+    font-size: 9px;
+  }
+  .sound-panel .visualizer {
+    height: 42px;
+  }
+  .now-playing:has(.sound-panel) .now-playing-body {
+    align-items: stretch;
+  }
+  .now-playing:has(.sound-panel) .now-playing-right {
+    max-width: none;
+  }
+  .compact .listening-modes > button {
+    min-height: 82px;
+  }
+}
+
+.audio-format-badge {
+  border: 1px solid #ffffff38;
+  color: #e7cedb;
+  border-radius: 5px;
+  padding: 5px 7px;
+  font-size: 8px;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+@media (min-width: 561px) {
+  .now-playing:has(.sound-panel) .now-playing-right {
+    align-items: flex-start;
+    overflow-y: auto;
+    max-height: calc(100dvh - 145px);
+    padding-right: 8px;
+    scrollbar-width: thin;
+    scrollbar-color: #ffffff26 transparent;
+  }
+  .now-playing:has(.sound-panel) .large-art {
+    max-height: min(420px, 45dvh);
+    width: auto;
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  .now-playing:has(.sound-panel) .now-song-label {
+    margin-top: 20px;
+  }
+  .sound-panel .eq-options {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .sound-panel .sound-space {
+    height: 125px;
+  }
+  .immersive .spatial-adjustments {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 20px;
+    row-gap: 13px;
+  }
+  .immersive .sound-adjustment-heading,
+  .immersive .spatial-note {
+    grid-column: 1/-1;
+    margin: 0;
+  }
+  .immersive .spatial-adjustments label {
+    margin: 0;
+  }
+}
+@media (max-width: 560px) {
+  .now-playing:has(.sound-panel) .large-art {
+    display: none;
+  }
+  .now-playing:has(.sound-panel) .now-song-label {
+    margin-top: 0;
+  }
+  .now-playing:has(.sound-panel) .now-playing-body {
+    gap: 24px;
   }
 }
