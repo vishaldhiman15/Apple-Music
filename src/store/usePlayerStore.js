@@ -3,7 +3,7 @@ import { useDataStore } from "./useDataStore";
 import { readStorage, writeStorage } from "../lib/storage";
 import { selectNextIndex } from "../lib/catalog";
 import demo from "../data/catalog.json";
-import { createSoundGraph, normalizeSoundSettings } from "../lib/audioEngine";
+import { createSoundGraph, normalizeSoundSettings, restoreSoundSettings, SOUND_DEFAULTS, SOUND_VERSION } from "../lib/audioEngine";
 let audio,
   context,
   analyser,
@@ -28,6 +28,7 @@ function saveSettings() {
     soundMode,
     spatialWidth,
     roomAmount,
+    soundVersion: SOUND_VERSION,
   });
 }
 function applyVolume() {
@@ -187,7 +188,7 @@ const usePlayerStore = create((set, get) => ({
   shuffle: settings.shuffle,
   repeat: settings.repeat,
   eq: settings.eq || "flat",
-  ...normalizeSoundSettings(settings),
+  ...restoreSoundSettings(settings),
   showNowPlaying: false,
   showLyrics: false,
   showQueue: false,
@@ -396,8 +397,7 @@ const usePlayerStore = create((set, get) => ({
   resetSpatial: () => {
     const next = {
       soundMode: get().soundMode,
-      spatialWidth: 0.65,
-      roomAmount: 0.25,
+      ...SOUND_DEFAULTS,
     };
     if (audioGraph) audioGraph.update(next);
     set(next);

@@ -171,7 +171,7 @@ export default function SettingsPage() {
                 value={s.eq}
                 onChange={(e) => s.setEqualizer(e.target.value)}
               >
-                <option value="flat">Balanced</option>
+                <option value="flat">Original · Flat</option>
                 <option value="warm">Warm</option>
                 <option value="vocal">Vocal</option>
                 <option value="bright">Bright</option>

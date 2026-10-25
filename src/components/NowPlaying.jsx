@@ -226,12 +226,12 @@ export default function NowPlaying() {
             <div className="sound-panel">
               <span className="eyebrow">A NEW DIMENSION OF LISTENING</span>
               <h2>Sound, all around you.</h2>
-              <p>Your mix. A little more room to move.</p>
+              <p>Clear vocals. Tight bass. Space that feels natural.</p>
               <SoundControls />
               <div className="sound-eq-label">TONE</div>
               <div className="eq-options">
                 {[
-                  ["flat", "Balanced"],
+                  ["flat", "Original"],
                   ["warm", "Warm"],
                   ["vocal", "Vocal"],
                   ["bright", "Bright"],

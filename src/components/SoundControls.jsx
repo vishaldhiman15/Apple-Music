@@ -47,11 +47,11 @@ export default function SoundControls({ compact = false }) {
       )}
       <div className="listening-modes" role="group" aria-label="Listening mode">
         {[
-          ["stereo", "Stereo", "The original left & right mix", Speaker],
+          ["stereo", "Stereo", "Original mix · natural and clear", Speaker],
           [
             "spatial",
             "Spatial stereo",
-            "Surround feel for headphones",
+            "Clear vocals · space around the music",
             Headphones,
           ],
         ].map(([id, label, description, Icon]) => (
@@ -74,7 +74,7 @@ export default function SoundControls({ compact = false }) {
       {spatial && (
         <div className="spatial-adjustments">
           <div className="sound-adjustment-heading">
-            <span>Make room for the music</span>
+            <span>A natural headphone soundstage</span>
             <button
               type="button"
               aria-label="Reset spatial settings"
@@ -103,11 +103,11 @@ export default function SoundControls({ compact = false }) {
           </label>
           <label>
             <span>
-              Room<output>{Math.round(roomAmount * 100)}%</output>
+              Ambience<output>{Math.round(roomAmount * 100)}%</output>
             </span>
             <input
               type="range"
-              aria-label="Spatial room"
+              aria-label="Spatial ambience"
               min="0"
               max="1"
               step=".01"
@@ -119,8 +119,8 @@ export default function SoundControls({ compact = false }) {
             </small>
           </label>
           <p className="spatial-note">
-            Use stereo headphones. Fixed binaural processing adds space to your
-            stereo mix. No head tracking or Dolby Atmos decoding.
+            Made for headphones. Vocals stay centered while stereo detail gains
+            a little space. This processes stereo recordings; it does not decode Dolby Atmos.
           </p>
         </div>
       )}

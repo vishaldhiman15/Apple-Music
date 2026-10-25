@@ -39,11 +39,13 @@ Guest and signed-in device libraries are stored in separate account scopes. Gues
 
 ## Stereo and spatial listening
 
-Open **Now Playing → Sound**, or use **Settings → Listening mode**. Stereo preserves the recording’s left/right mix. Spatial stereo renders those channels through fixed HRTF virtual speakers and adds adjustable, damped rear reflections for stereo headphones. Soundstage changes speaker positions; Room changes reflection gain. Tone presets, smooth mode transitions, output volume/mute, and a safety limiter share the same Web Audio graph. Preferences persist after reload and apply when you next press play.
+Open **Now Playing → Sound**, or use **Settings → Listening mode**. Stereo with **Original / Flat** tone uses a unity-gain signal path that bypasses EQ, spatial effects, and compression, including after changing modes. Tone profiles use gentle EQ with input headroom instead of compressing the original stereo mix.
 
-This is binaural processing of the available stereo recording. It does not decode Dolby Atmos, add head tracking, create discrete 5.1/7.1 source channels, or improve the source recording’s bitrate. For headphones already applying spatial processing in the operating system, use only one spatial processor at a time.
+Spatial stereo keeps the common center signal intact, so centered vocals, mono content, and bass stay anchored. A modest mid/side width adjustment and quiet, filtered HRTF ambience act on stereo differences. Reflections exclude the common center; the default ambience is 8% and width is 45%. Spatial headroom and a soft peak guard protect the processed branch without full-mix compression. Existing presets from the earlier full-mix renderer migrate once to the subtler defaults. Mode and control changes are smoothed.
 
-`npm run test:audio` serves a developer-only browser test page at `http://127.0.0.1:4190`. Run its seven native OfflineAudioContext checks for stereo separation, binaural output, soundstage, reflections, mono upmix, returning to stereo, and EQ. The check page is outside the production bundle. These checks passed in the local Chromium browser; headphone perception and device-specific output quality still need listening checks on your hardware.
+This is headphone processing of a stereo source, not Dolby Atmos decoding, head tracking, or discrete 5.1/7.1. It cannot restore detail missing from the source. Use only one spatial processor when headphones or the operating system also apply spatial effects.
+
+`npm run test:audio` serves a developer-only browser page at `http://127.0.0.1:4190`. Its native OfflineAudioContext checks verify sample-transparent Stereo, channel separation, center and mono stability, width and ambience, hot-source peaks, EQ headroom, and returning to unprocessed Stereo. These checks measure the rendered signal; headphone preference still requires a listening comparison on your hardware. The check page is outside the production bundle.
 
 ## Connect Cloudinary locally
 
