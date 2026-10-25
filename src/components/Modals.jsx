@@ -122,11 +122,9 @@ function AddModal({ songs, onClose }) {
     if (busy) return;
     setBusy(true);
     try {
-      await useDataStore
-        .getState()
-        .updatePlaylist(p.id, {
-          songs: [...new Set([...p.songs, ...songs.map((s) => s.id)])],
-        });
+      await useDataStore.getState().updatePlaylist(p.id, {
+        songs: [...new Set([...p.songs, ...songs.map((s) => s.id)])],
+      });
       useUIStore.getState().notify(`Added to ${p.name}.`);
       onClose();
     } catch (e) {
@@ -208,6 +206,16 @@ function SongMenu({ song: s, onClose, playlistId }) {
         </div>
       </div>
       <div className="song-actions">
+        {s.sourceUrl && (
+          <a
+            className="provider-source-link"
+            href={s.sourceUrl}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <ArrowUpRight size={18} /> View artist and track on Audius
+          </a>
+        )}
         <button
           disabled={busy}
           onClick={() => action(() => player.getState().playSong(s))}
@@ -394,11 +402,15 @@ export default function Modals() {
               ["Year", s.releaseYear || "—"],
               [
                 "Source",
-                s.local
-                  ? "Imported recording on this device"
-                  : s.demo
-                    ? "Original demo recording"
-                    : "Connected library",
+                s.provider === "audius"
+                  ? "Audius · online stream"
+                  : s.provider === "cloudinary"
+                    ? "Your Cloudinary library"
+                    : s.local
+                      ? "Imported recording on this device"
+                      : s.demo
+                        ? "Original demo recording"
+                        : "Connected library",
               ],
               [
                 "Vocals",

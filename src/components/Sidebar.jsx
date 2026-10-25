@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from "react-router-dom";
 import {
   House,
   Compass,
+  Globe2,
   Radio,
   Clock3,
   Mic2,
@@ -87,6 +88,7 @@ export default function Sidebar() {
           <div className="nav-group">
             {[
               ["/", "Listen Now", House],
+              ["/online", "Online music", Globe2],
               ["/new", "Discover", Compass],
               ["/radio", "Radio", Radio],
             ].map(link)}

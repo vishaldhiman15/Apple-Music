@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import AppLayout from "./layouts/AppLayout";
+import OnlinePage from "./pages/OnlinePage";
 import HomePage from "./pages/HomePage";
 import SearchPage from "./pages/SearchPage";
 import LibraryPage from "./pages/LibraryPage";
@@ -47,6 +48,7 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="home" element={<Navigate to="/" replace />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="online" element={<OnlinePage />} />
           <Route path="new" element={<NewPage />} />
           <Route path="radio" element={<RadioPage />} />
           <Route

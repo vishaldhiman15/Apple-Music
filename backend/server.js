@@ -63,6 +63,7 @@ app.use("/api", (req, res, next) =>
           "Account sync is unavailable. Your device library still works.",
       }),
 );
+app.use("/api/catalog", require("./routes/catalogRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/songs", require("./routes/songRoutes"));
 app.use("/api/playlists", require("./routes/playlistRoutes"));

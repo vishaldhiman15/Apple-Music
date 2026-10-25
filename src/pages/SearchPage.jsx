@@ -1,3 +1,4 @@
+import OnlineMusic from "../components/OnlineMusic";
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { Search, X, ArrowUpRight, Compass, Play } from "lucide-react";
@@ -142,6 +143,7 @@ export default function SearchPage() {
         </>
       ) : (
         <>
+          <OnlineMusic query={query} />
           <div className="filter-pills">
             {["All", "Songs", "Albums", "Artists"].map((t) => (
               <button
@@ -199,7 +201,7 @@ export default function SearchPage() {
             <Empty
               icon={Search}
               title="Nothing here just yet."
-              body="Try a different name, title, or genre. Search looks through the music in this library."
+              body="No matches in your saved library. Try the online catalog above for more music."
             />
           )}
         </>

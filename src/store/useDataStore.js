@@ -59,7 +59,7 @@ function validateName(name) {
   return value;
 }
 export const useDataStore = create((set, get) => ({
-  songs: demo.songs,
+  songs: [...demo.songs, ...readStorage("music-online-cache", [])],
   albums: demo.albums,
   artists: demo.artists,
   scope: "guest",
@@ -68,6 +68,46 @@ export const useDataStore = create((set, get) => ({
   status: "ready",
   catalogSource: "demo",
   localCount: 0,
+  onlineStatus: "idle",
+  onlineError: "",
+  mergeOnline: (tracks) => {
+    const combined = [
+      ...new Map([...get().songs, ...tracks].map((s) => [s.id, s])).values(),
+    ];
+    const derived = deriveCatalog(combined);
+    set({
+      songs: combined,
+      albums: derived.albums.map((a) => ({
+        ...demo.albums.find((d) => d.id === a.id),
+        ...a,
+      })),
+      artists: derived.artists,
+    });
+    writeStorage(
+      "music-online-cache",
+      combined.filter((s) => s.provider === "audius").slice(-200),
+    );
+  },
+  fetchOnline: async ({ query = "", genre = "", offset = 0 } = {}) => {
+    set({ onlineStatus: "loading", onlineError: "" });
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        genre,
+        offset: String(offset),
+      });
+      const result = await api(
+        "/catalog/" + (query ? "search" : "trending") + "?" + params,
+        { timeout: 20000 },
+      );
+      get().mergeOnline(result.tracks);
+      set({ onlineStatus: "ready" });
+      return result;
+    } catch (error) {
+      set({ onlineStatus: "error", onlineError: error.message });
+      throw error;
+    }
+  },
   fetchCatalog: async () => {
     if (!backendEnabled) return;
     try {
@@ -94,14 +134,16 @@ export const useDataStore = create((set, get) => ({
           favourites: [
             ...new Set([
               ...(user.favourites || []),
-              ...userData.favourites.filter((id) => id.startsWith("import-")),
+              ...userData.favourites.filter(
+                (id) => id.startsWith("import-") || id.startsWith("audius-"),
+              ),
             ]),
           ],
           recentlyPlayed: [
             ...new Set([
               ...(user.recentlyPlayed || []),
-              ...userData.recentlyPlayed.filter((id) =>
-                id.startsWith("import-"),
+              ...userData.recentlyPlayed.filter(
+                (id) => id.startsWith("import-") || id.startsWith("audius-"),
               ),
             ]),
           ],
@@ -169,15 +211,24 @@ export const useDataStore = create((set, get) => ({
     let favourites = userData.favourites.includes(id)
       ? userData.favourites.filter((x) => x !== id)
       : [...userData.favourites, id];
-    if (user && !get().songs.find((s) => s.id === id)?.local) {
+    if (
+      user &&
+      !get().songs.find((s) => s.id === id)?.local &&
+      (user.provider === "chatgpt" ||
+        get().songs.find((s) => s.id === id)?.provider !== "audius")
+    ) {
       favourites = [
         ...(await api("/users/favourites", {
           method: "PUT",
           body: { songId: id },
         })),
-        ...userData.favourites.filter(
-          (sid) => get().songs.find((s) => s.id === sid)?.local,
-        ),
+        ...userData.favourites.filter((sid) => {
+          const track = get().songs.find((s) => s.id === sid);
+          return (
+            track?.local ||
+            (user.provider !== "chatgpt" && track?.provider === "audius")
+          );
+        }),
       ];
     }
     const data = { ...get().userData, favourites };
@@ -203,7 +254,11 @@ export const useDataStore = create((set, get) => ({
     };
     set({ userData: data });
     persist(scope, data);
-    if (user && !s.local)
+    if (
+      user &&
+      !s.local &&
+      (user.provider === "chatgpt" || s.provider !== "audius")
+    )
       api("/users/recently-played", {
         method: "PUT",
         body: { albumId: s.albumId, songId: id },
@@ -242,6 +297,15 @@ export const useDataStore = create((set, get) => ({
     if (!current) throw new Error("Playlist not found.");
     let updated = { ...current, ...patch };
     if (user && !id.startsWith("local-")) {
+      if (
+        user.provider !== "chatgpt" &&
+        (patch.songs || current.songs).some(
+          (sid) => get().songs.find((s) => s.id === sid)?.provider === "audius",
+        )
+      )
+        throw new Error(
+          "Use a device playlist for online tracks on this local server.",
+        );
       const remoteSongs = (patch.songs || current.songs).filter(
         (sid) => !get().songs.find((s) => s.id === sid)?.local,
       );

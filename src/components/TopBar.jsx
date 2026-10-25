@@ -37,13 +37,15 @@ export default function TopBar() {
         <span className="topbar-section">
           {location.pathname.startsWith("/library")
             ? "Your Library"
-            : location.pathname === "/radio"
-              ? "Radio"
-              : location.pathname === "/new"
-                ? "Discover"
-                : location.pathname.startsWith("/playlist")
-                  ? "Playlists"
-                  : "Listen Now"}
+            : location.pathname === "/online"
+              ? "Online music"
+              : location.pathname === "/radio"
+                ? "Radio"
+                : location.pathname === "/new"
+                  ? "Discover"
+                  : location.pathname.startsWith("/playlist")
+                    ? "Playlists"
+                    : "Listen Now"}
         </span>
       </div>
       <form

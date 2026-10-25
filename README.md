@@ -1,6 +1,6 @@
 # Music Max
 
-A complete redesign of [Vishal Dhiman’s Apple-Music project](https://github.com/vishaldhiman15/Apple-Music), with a working audio library, expressive editorial artwork, and an optional MongoDB account server.
+A complete redesign of [Vishal Dhiman’s Apple-Music project](https://github.com/vishaldhiman15/Apple-Music), with a working audio library, expressive editorial artwork, Cloudinary uploads, free online music through Audius, and both hosted and local account storage.
 
 ## Run it
 
@@ -63,18 +63,36 @@ npm run services:check
 
 This verifies MongoDB with a database ping and Cloudinary with an authenticated provider ping, without printing credentials or creating uploads. Sign in to the local app and choose **Import music → Cloud library** to upload audio and optional artwork. The backend signs requests, keeps the secret server-side, checks ownership, verifies the provider’s uploaded resource, and saves its HTTPS URLs in MongoDB. Missing credentials leave device imports usable and cloud upload controls disabled.
 
-A hosted static demo cannot reach your computer’s local MongoDB; use the local frontend at `http://127.0.0.1:3000` for this setup.
+## Online music and hosted app
 
-## Production
+The private hosted app is at https://music-max-tourist.smokyharp11.chatgpt.site. It runs a Worker API, authenticates through ChatGPT, stores profiles, favorites, playlists, and upload records in the Site's D1 database, and uses Cloudinary for uploaded audio and cover images. Each account's hosted library records are isolated. Cloudinary delivery URLs are public to anyone who has the link. The hosted app does not connect to your computer's MongoDB; the Node server still uses MongoDB locally or on Vercel.
 
-### Static / device-only
+**Online music** searches and plays the Audius catalog through its [official public API](https://docs.audius.co/api/). Read-only catalog search, trending, and streaming work without an API key. Availability and free service limits depend on Audius. Gated, unlisted, deleted, and unavailable tracks are excluded. The app displays the source and links back to Audius. This is an independent music catalog, not Apple Music's or Spotify's subscription library.
+
+Streams pass through a same-origin API endpoint with byte-range forwarding for playback and seeking. The app does not copy Audius audio into Cloudinary or offline storage. Original bundled demo recordings are delivered from Cloudinary in the hosted build. Browser imports and offline demo saving remain available; online provider tracks require a connection. Stereo, spatial stereo, and EQ process the audio that the browser receives.
+
+### Build and preview the hosted Worker
 
 ```sh
 npm run build
 npm run preview
 ```
 
-Serve `dist/` over HTTPS with an SPA fallback to `index.html` and correct JavaScript, SVG, and MP3 content types. Production builds use device-only mode unless explicitly configured for an API. `.openai/hosting.json` configures the accompanying private Sites demo, which runs in this mode. Browser imports, playlists, favorites, recommendations, lyrics, and offline demo audio work there; account sync and cloud uploads need a server deployment.
+Open `http://127.0.0.1:4173`. The preview uses a local SQLite adapter for D1 and an explicitly simulated local preview identity; this identity injection is only in the loopback preview server. Production trusts the identity headers supplied by Sites. `backend/.env` supplies local preview Cloudinary values; production requires the same three values as secret hosting environment variables. No Cloudinary secret is included in client JavaScript.
+
+`.openai/hosting.json` retains the existing Site ID and declares the `DB` D1 binding. `db/schema.ts` and the generated `drizzle/` migration journal define hosted storage. `npm run db:generate` generates future migrations; retain already published migrations. The build embeds the app shell and static text assets in `dist/server/index.js`, with the hosting manifest at `dist/.openai/hosting.json`. The Sites packaging helper includes the generated migrations.
+
+`npm run media:publish` uploads the original demo recordings to Cloudinary using content-hashed IDs and writes only public delivery URLs and hashes to `worker/media.json`. Existing unchanged recordings are skipped. Run it only when the original demo media changes.
+
+`GET /api/health?check=1` verifies an actual database query and authenticated Cloudinary ping without returning credentials. A normal health request reports configured services without those external calls.
+
+### Static / device library
+
+```sh
+npm run build:device
+```
+
+Serve `dist/` over HTTPS with an SPA fallback to `index.html` and the correct asset content types. The device build needs a reachable API for online Audius music and cloud accounts. The local Vite proxy and the included Node API provide those endpoints when running `npm run dev:full`.
 
 ### Full stack on Vercel
 
@@ -89,7 +107,7 @@ The included `vercel.json` serves the Vite build and routes `/api/*` to `backend
 | `COOKIE_SECURE=true`                                                   | Secure session cookies under HTTPS.                                      |
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Optional; enable verified direct media uploads.                          |
 
-Seed the same database once with `npm run seed` from an environment with its `MONGODB_URI`. Seeding only upserts the original demo catalog; it does not delete accounts, uploads, or playlists. The checked-in demo media is served by the frontend deployment. A separate API origin can be configured at build time with `VITE_API_URL`; app/API hosts must be same-site for the current SameSite=Lax cookie design, and the API must allow the exact app origin. A static Sites deployment does not run the Node/MongoDB server.
+Seed the same database once with `npm run seed` from an environment with its `MONGODB_URI`. Seeding only upserts the original demo catalog; it does not delete accounts, uploads, or playlists. The checked-in demo media is served by the frontend deployment. A separate API origin can be configured at build time with `VITE_API_URL`; app/API hosts must be same-site for the current SameSite=Lax cookie design, and the API must allow the exact app origin. The hosted Sites Worker uses D1, while this separate Vercel deployment uses MongoDB.
 
 The server validates input, bounds request bodies, restricts origins, requires a mutation header, rate-limits requests, hashes passwords with bcrypt, and uses HttpOnly sessions. This project does not include password reset/email delivery, token revocation storage, distributed rate limits, billing, or a licensed subscription catalog. Complete deployment-specific monitoring, backups, and account recovery before offering a public account service.
 
@@ -101,12 +119,12 @@ npm run build
 npm audit
 ```
 
-Tests cover recommendation ranking, catalog references and media files, shuffled queue boundaries, LRC parsing, offline byte ranges, authentication, request protection, playlist ownership/CRUD, concurrent favorites, profile restrictions, and non-destructive seeding. Integration tests launch a disposable MongoDB when `mongod` is available, or use `MONGODB_TEST_URI` with a newly generated test database name. They drop only that generated database. Without either MongoDB option those integration tests explicitly skip. GitHub Actions provides MongoDB and runs the tests and build.
+Tests cover recommendation ranking, catalog references and media files, shuffled queue boundaries, LRC parsing, offline byte ranges, authentication, request protection, playlist ownership/CRUD, concurrent favorites, profile restrictions, non-destructive seeding, hosted D1 ownership and persistence, provider filtering, Cloudinary signature verification, and streamed range forwarding. Integration tests launch a disposable MongoDB when `mongod` is available, or use `MONGODB_TEST_URI` with a newly generated test database name. They drop only that generated database. Without either MongoDB option those integration tests explicitly skip. GitHub Actions provides MongoDB and runs the tests and build.
 
 Manual browser checks include actual playback and seeking, playlist persistence after reload, native file import, imported playback after reload, timed lyric seeking, equalizer controls, and responsive layouts. Offline range handling is tested automatically; a full physical-device airplane-mode test is not part of this verification.
 
 ## Structure and media
 
-`src/` contains React, Router, Zustand stores, the native player, IndexedDB storage, recommendations, and views. `backend/` contains the Express/Mongoose API. `scripts/` contains local full-stack startup and production service-worker generation. `public/artwork/` and `public/audio/` contain the demo media. All artwork is original SVG and every bundled recording is an original procedurally composed instrumental; names are fictional. `scripts/generate-demo-assets.py` can regenerate these assets with Python/NumPy and FFmpeg, but neither is needed to run or build the app.
+`src/` contains React, Router, Zustand stores, the native player, IndexedDB storage, recommendations, and views. `backend/` contains the Express/Mongoose API; `worker/` contains the hosted API and Audius integration; `db/` and `drizzle/` define hosted storage. `scripts/` contains local full-stack startup and production service-worker generation. `public/artwork/` and `public/audio/` contain the demo media. All artwork is original SVG and every bundled recording is an original procedurally composed instrumental; names are fictional. `scripts/generate-demo-assets.py` can regenerate these assets with Python/NumPy and FFmpeg, but neither is needed to run or build the app.
 
-Music Max is independent and is not affiliated with Apple. It does not stream Apple Music’s subscription catalog, claim lossless source quality, or use third-party commercial recordings. The original repository did not include a license; retain its attribution and obtain any necessary permission before redistributing its original code commercially.
+Music Max is independent and is not affiliated with Apple. It does not stream Apple Music’s subscription catalog, claim lossless source quality, or imply access to an Apple Music subscription. Online recordings are supplied by Audius, with attribution and source links. The original repository did not include a license; retain its attribution and obtain any necessary permission before redistributing its original code commercially.

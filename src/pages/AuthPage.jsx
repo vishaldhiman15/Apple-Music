@@ -16,6 +16,7 @@ export default function AuthPage({ register = false }) {
     register: signup,
     backendAvailable,
     checking,
+    authProvider,
   } = useAuthStore();
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
@@ -72,7 +73,19 @@ export default function AuthPage({ register = false }) {
               ? "Keep your playlists and favorites in sync."
               : "Pick up right where the good music left off."}
           </p>
-          {backendAvailable ? (
+          {authProvider === "chatgpt" ? (
+            <div className="device-welcome">
+              <Headphones size={24} />
+              <h3>Your cloud library is connected.</h3>
+              <p>
+                This hosted app uses your ChatGPT sign-in for your private
+                music, favorites, and playlists.
+              </p>
+              <button className="btn primary" onClick={() => nav("/")}>
+                Continue to music
+              </button>
+            </div>
+          ) : backendAvailable ? (
             <form onSubmit={submit}>
               {register && (
                 <label>

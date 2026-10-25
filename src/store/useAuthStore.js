@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { api, backendEnabled } from "../lib/api";
-export const useAuthStore = create((set) => ({
+export const useAuthStore = create((set, get) => ({
   currentUser: null,
   checking: true,
   backendAvailable: false,
+  authProvider: "password",
   fetchProfile: async () => {
     if (!backendEnabled) {
       set({ checking: false });
@@ -11,7 +12,10 @@ export const useAuthStore = create((set) => ({
     }
     try {
       const health = await api("/health", { timeout: 1800 });
-      set({ backendAvailable: health.database === "connected" });
+      set({
+        backendAvailable: health.database === "connected",
+        authProvider: health.authProvider || "password",
+      });
       if (health.database === "connected") {
         try {
           const user = await api("/auth/me");
@@ -48,6 +52,10 @@ export const useAuthStore = create((set) => ({
     }
   },
   logout: async () => {
+    if (get().authProvider === "chatgpt") {
+      window.location.assign("/signout-with-chatgpt?return_to=%2F");
+      return;
+    }
     await api("/auth/logout", { method: "POST" });
     set({ currentUser: null });
   },

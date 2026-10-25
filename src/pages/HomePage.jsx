@@ -1,3 +1,4 @@
+import OnlineMusic from "../components/OnlineMusic";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
@@ -49,6 +50,18 @@ export default function HomePage() {
         </div>
         <p>Your world. In sound.</p>
       </header>
+      <div className="online-banner">
+        <div>
+          <span className="live-connection-dot" />
+          <b>Your music is online.</b>
+          <span>
+            Fresh discoveries from Audius. Your recordings on Cloudinary.
+          </span>
+        </div>
+        <button onClick={() => nav("/online")}>
+          Explore online <ArrowUpRight size={15} />
+        </button>
+      </div>
       <div className="mood-tabs" aria-label="Listening mood">
         {Object.keys(MOODS).map((m) => (
           <button
@@ -146,6 +159,7 @@ export default function HomePage() {
           </article>
         )}
       </section>
+      <OnlineMusic compact />
       <section className="album-section">
         <SectionHead
           title={

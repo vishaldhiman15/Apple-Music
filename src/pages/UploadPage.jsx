@@ -23,6 +23,7 @@ const ALLOWED = /\.(mp3|wav|m4a|aac|ogg|opus|flac|webm|mp4)$/i;
 export default function UploadPage() {
   const nav = useNavigate();
   const user = useAuthStore((s) => s.currentUser);
+  const authProvider = useAuthStore((s) => s.authProvider);
   const [file, setFile] = useState(null),
     [cover, setCover] = useState(null),
     [coverUrl, setCoverUrl] = useState(""),
@@ -46,7 +47,10 @@ export default function UploadPage() {
   useEffect(() => {
     if (user)
       api("/health")
-        .then((h) => setCloud(h.uploads))
+        .then((h) => {
+          setCloud(h.uploads);
+          if (h.uploads && h.hosting === "online") setTarget("cloud");
+        })
         .catch(() => {});
   }, [user]);
   useEffect(() => {
@@ -168,19 +172,17 @@ export default function UploadPage() {
         await useDataStore.getState().fetchCatalog();
       } else {
         setProgress("Saving your recording on this device…");
-        await useDataStore
-          .getState()
-          .importTrack({
-            audio: file,
-            cover,
-            metadata: {
-              ...fields,
-              albumTitle: fields.albumTitle.trim() || "My Collection",
-              duration,
-              instrumental: fields.instrumental,
-              mime: file.type,
-            },
-          });
+        await useDataStore.getState().importTrack({
+          audio: file,
+          cover,
+          metadata: {
+            ...fields,
+            albumTitle: fields.albumTitle.trim() || "My Collection",
+            duration,
+            instrumental: fields.instrumental,
+            mime: file.type,
+          },
+        });
       }
       useUIStore.getState().notify("Your music is right where it belongs.");
       nav("/library/songs");
@@ -282,7 +284,9 @@ export default function UploadPage() {
               <p>
                 {target === "device"
                   ? "Device imports are stored in your browser and can play offline. Clearing browser data removes those copies."
-                  : "Cloud uploads are visible in the shared catalog. Only upload recordings you have permission to share."}
+                  : authProvider === "chatgpt"
+                    ? "Uploads are saved to your cloud library. Cloudinary media URLs can be accessed by anyone with the link. Only upload recordings you have permission to share."
+                    : "Cloud uploads are visible in the shared catalog. Only upload recordings you have permission to share."}
               </p>
             </div>
           </div>
@@ -314,7 +318,9 @@ export default function UploadPage() {
                     ? "Sign in to enable"
                     : !cloud
                       ? "Not connected"
-                      : "Share with your catalog"}
+                      : authProvider === "chatgpt"
+                        ? "Available across your devices"
+                        : "Share with your catalog"}
                 </small>
               </span>
               {target === "cloud" && <Check size={15} />}
