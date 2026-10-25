@@ -1,159 +1,308 @@
-import { ChevronRight } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
-import usePlayerStore from '../store/usePlayerStore'
-import { useAuthStore } from '../store/useAuthStore'
-import { useDataStore } from '../store/useDataStore'
-
-function TopPickCard({ pick }) {
+import OnlineMusic from "../components/OnlineMusic";
+import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Play,
+  ArrowUpRight,
+  ChevronRight,
+  Sparkles,
+  Headphones,
+  Radio,
+  Heart,
+  Plus,
+} from "lucide-react";
+import { useDataStore } from "../store/useDataStore";
+import { useUIStore } from "../store/useUIStore";
+import player from "../store/usePlayerStore";
+import { recommendAlbums } from "../lib/catalog";
+import { AlbumCard, Cover, SectionHead, IconButton } from "../components/UI";
+const MOODS = {
+  All: null,
+  Focus: ["Ambient", "Lo-fi", "Classical"],
+  Chill: ["Soul", "Jazz", "Acoustic", "R&B"],
+  Energy: ["Electronic", "Dance"],
+  Unwind: ["Ambient", "Acoustic", "Classical"],
+};
+export default function HomePage() {
+  const { songs, albums, userData } = useDataStore();
+  const [mood, setMood] = useState("All");
+  const nav = useNavigate();
+  const selected = recommendAlbums(albums, songs, userData).filter(
+    (a) => !MOODS[mood] || MOODS[mood].includes(a.genre),
+  );
+  const recent = userData.recentlyPlayed
+    .map((id) => albums.find((a) => a.id === id))
+    .filter(Boolean);
+  const featured = albums.find((a) => a.title === "After Hours") || albums[0];
+  const secondary = albums.find((a) => a.title === "Soft Focus") || albums[1];
+  const playAlbum = (a) => {
+    const tracks = songs.filter((s) => s.albumId === a.id);
+    if (tracks.length) player.getState().playSong(tracks[0], tracks);
+  };
   return (
-    <div className={`relative rounded-xl overflow-hidden aspect-[16/9] min-w-[320px] flex-shrink-0 cursor-pointer group bg-gradient-to-br ${pick.gradient} shadow-lg hover:shadow-xl transition-shadow duration-300`}>
-      {pick.image && (
-        <img
-          src={pick.image}
-          alt={pick.title}
-          className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-40 group-hover:opacity-55 transition-opacity duration-500"
-          onError={(e) => { e.target.style.display = 'none' }}
-        />
-      )}
-
-      {pick.badge && (
-        <div className="absolute top-3 right-3">
-          <span className="text-white/90 text-[9px] font-bold tracking-wider uppercase bg-white/[0.12] backdrop-blur-md rounded-full px-2.5 py-0.5 border border-white/15">
-            ♫ Music
+    <div className="home-page page-container">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">A SOUNDTRACK FOR EVERY SIDE OF YOU</span>
+          <h1>
+            Listen Now<span className="heading-dot">.</span>
+          </h1>
+        </div>
+        <p>Your world. In sound.</p>
+      </header>
+      <div className="online-banner">
+        <div>
+          <span className="live-connection-dot" />
+          <b>Your music is online.</b>
+          <span>
+            Fresh discoveries from Audius. Your recordings on Cloudinary.
           </span>
         </div>
-      )}
-
-      <div className="absolute bottom-0 left-0 right-0 p-4 top-pick-gradient">
-        <p className="text-white/60 text-[10px] font-semibold tracking-wide uppercase mb-0.5">{pick.label}</p>
-        <h3 className="text-white text-xl font-bold leading-tight line-clamp-1">{pick.title}</h3>
-        {pick.subtitle && (
-          <p className="text-white/50 text-[12px] mt-0.5 line-clamp-1">{pick.subtitle}</p>
-        )}
+        <button onClick={() => nav("/online")}>
+          Explore online <ArrowUpRight size={15} />
+        </button>
       </div>
-
-      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.06] transition-colors duration-300" />
-    </div>
-  )
-}
-
-function AlbumCard({ album, songs }) {
-  const navigate = useNavigate()
-  const playSong = usePlayerStore(s => s.playSong)
-  const allSongs = songs.filter(s => s.albumId === album.id)
-
-  const handlePlay = (e) => {
-    e.stopPropagation()
-    if (allSongs.length > 0) {
-      playSong(allSongs[0], allSongs)
-    }
-  }
-
-  const artistName = typeof album.artist === 'string' ? album.artist : album.artist?.name || 'Unknown Artist'
-
-  return (
-    <div className="group cursor-pointer" onClick={() => navigate(`/album/${album.id}`)}>
-      <div className="relative rounded-lg overflow-hidden aspect-square mb-2 shadow-md group-hover:shadow-lg transition-shadow duration-300">
-        <img
-          src={album.coverUrl || album.cover}
-          alt={album.title}
-          className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-500 ease-out"
-          onError={(e) => {
-            e.target.src = `https://via.placeholder.com/180/2a2a2c/666?text=${encodeURIComponent(album.title?.substring(0, 2) || '?')}`
-          }}
-        />
-        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/25 transition-colors duration-300 flex items-center justify-center">
-          <div 
-            onClick={handlePlay}
-            className="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 transform scale-75 group-hover:scale-100 shadow-lg hover:scale-105"
+      <div className="mood-tabs" aria-label="Listening mood">
+        {Object.keys(MOODS).map((m) => (
+          <button
+            key={m}
+            className={mood === m ? "active" : ""}
+            onClick={() => setMood(m)}
           >
-            <svg className="w-5 h-5 text-black ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-      <h4 className="text-[13px] font-medium text-am-text truncate leading-tight">{album.title}</h4>
-      <p className="text-[12px] text-am-text-secondary truncate mt-0.5">{artistName}</p>
-    </div>
-  )
-}
-
-function RecommendationRow({ title, displayAlbums, songs }) {
-  if (!displayAlbums || displayAlbums.length === 0) return null
-
-  return (
-    <section className="mb-8">
-      <div className="flex items-center gap-0.5 mb-3 group cursor-pointer w-fit">
-        <h2 className="text-[20px] font-bold text-am-text tracking-tight group-hover:text-am-red transition-colors">{title}</h2>
-        <ChevronRight size={20} className="text-am-text-muted group-hover:text-am-red transition-colors mt-0.5" />
-      </div>
-      <div className="scroll-row scrollbar-hide">
-        {displayAlbums.map(album => (
-          <AlbumCard key={album.id} album={album} songs={songs} />
+            {m === "All" && <Sparkles size={13} />} {m}
+          </button>
         ))}
       </div>
-    </section>
-  )
-}
-
-export default function HomePage() {
-  const currentUser = useAuthStore(state => state.currentUser)
-  const userData = useDataStore(state => state.getUserData(currentUser))
-  const albums = useDataStore(state => state.albums)
-  const songs = useDataStore(state => state.songs)
-
-  // Generate dynamic top picks from albums
-  const dynamicTopPicks = albums.slice(0, 4).map((a, i) => ({
-    id: `tp${i}`,
-    label: i === 0 ? 'Made for You' : 'New Release',
-    title: a.title,
-    subtitle: typeof a.artist === 'string' ? a.artist : a.artist?.name,
-    gradient: ['from-red-600 to-orange-500', 'from-gray-700 to-gray-900', 'from-orange-500 to-yellow-400', 'from-yellow-500 to-orange-400'][i % 4],
-    image: a.coverUrl || a.cover,
-    badge: i % 2 === 0
-  }))
-
-  const recentlyPlayedAlbums = userData.recentlyPlayed.map(id => albums.find(a => a.id === id)).filter(Boolean)
-  const madeForYouAlbums = albums.slice(0, 5)
-  const stationsAlbums = albums.slice(5, 10)
-
-  return (
-    <div className="px-6 pb-8 animate-fade-in">
-      {/* Header */}
-      <h1 className="text-[28px] font-bold text-am-text mb-6 tracking-tight">Listen Now</h1>
-
-      {/* Top Picks */}
-      {dynamicTopPicks.length > 0 && (
-        <section className="mb-8">
-          <h2 className="text-[20px] font-bold text-am-text mb-3 tracking-tight">Top Picks for You</h2>
-          <div className="scroll-row scrollbar-hide -mx-6 px-6">
-            {dynamicTopPicks.map(pick => (
-              <TopPickCard key={pick.id} pick={pick} />
+      <section className="feature-grid">
+        {featured && (
+          <article className="feature-card main-feature">
+            <Cover
+              src={
+                featured.demo
+                  ? "/artwork/hero-after-hours.svg"
+                  : featured.coverUrl
+              }
+              alt=""
+              className="feature-background"
+            />
+            <div className="feature-shade" />
+            <div className="feature-top">
+              <span>
+                <i /> THE AFTER-HOURS EDIT
+              </span>
+              <span className="feature-logo">MUSIC MAX / 001</span>
+            </div>
+            <div className="feature-copy">
+              <span className="feature-kicker">WHEN THE CITY GOES QUIET</span>
+              <h2>
+                Stay up.
+                <br />
+                Tune in.
+              </h2>
+              <p>
+                A little darker. A little deeper.
+                <br />
+                Find your rhythm after hours.
+              </p>
+              <button
+                className="btn btn-white"
+                onClick={() => playAlbum(featured)}
+              >
+                <Play size={15} fill="currentColor" /> Listen now
+              </button>
+              <button
+                className="feature-details"
+                aria-label="Explore After Hours"
+                onClick={() => nav("/album/" + featured.id)}
+              >
+                <ArrowUpRight size={22} />
+              </button>
+            </div>
+            <div className="feature-bottom">
+              <span>NIGHT TAPES — AFTER HOURS</span>
+              <span>ORIGINAL RECORDINGS</span>
+            </div>
+          </article>
+        )}
+        {secondary && (
+          <article className="feature-card secondary-feature">
+            <Cover
+              src={secondary.coverUrl}
+              alt=""
+              className="feature-background"
+            />
+            <div className="secondary-shade" />
+            <div className="feature-top">
+              <span>ROOM TO BREATHE</span>
+              <Headphones size={20} />
+            </div>
+            <div className="soft-orbit">
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="feature-copy">
+              <span className="feature-kicker">A SOFTER SIDE OF SOUND</span>
+              <h2>
+                Less noise.
+                <br />
+                More feeling.
+              </h2>
+              <p>Quiet moments, beautifully scored.</p>
+              <button
+                className="feature-text-button"
+                onClick={() => playAlbum(secondary)}
+              >
+                Find your focus <ArrowUpRight size={17} />
+              </button>
+            </div>
+          </article>
+        )}
+      </section>
+      <OnlineMusic compact />
+      <section className="album-section">
+        <SectionHead
+          title={
+            mood === "All" ? "Made for your kind of day" : mood + " starts here"
+          }
+          subtitle={
+            userData.history.length
+              ? "A mix shaped by what you love."
+              : "A few favorites to get you started."
+          }
+          to="/library/albums"
+        />
+        <div className="album-shelf">
+          {selected.slice(0, 6).map((a) => (
+            <AlbumCard key={a.id} album={a} />
+          ))}
+        </div>
+      </section>
+      {recent.length > 0 && (
+        <section className="album-section">
+          <SectionHead
+            title="Pick up where you left off"
+            subtitle="Good music deserves another listen."
+            to="/library/recent"
+          />
+          <div className="album-shelf">
+            {recent.slice(0, 6).map((a) => (
+              <AlbumCard key={a.id} album={a} />
             ))}
           </div>
         </section>
       )}
-
-      {/* Recently Played */}
-      <RecommendationRow
-        title="Recently Played"
-        displayAlbums={recentlyPlayedAlbums}
-        songs={songs}
-      />
-
-      {/* Curated rows */}
-      <RecommendationRow
-        title="Made for You"
-        displayAlbums={madeForYouAlbums}
-        songs={songs}
-      />
-
-      <RecommendationRow
-        title="Stations for You"
-        displayAlbums={stationsAlbums}
-        songs={songs}
-      />
+      <section className="quick-picks">
+        <SectionHead
+          title="Your next little obsession"
+          subtitle="One tap away from something good."
+          to="/library/songs"
+        />
+        <div className="quick-pick-grid">
+          {selected.slice(0, 6).map((a) => {
+            const song = songs.find((s) => s.albumId === a.id);
+            if (!song) return null;
+            return (
+              <div className="quick-pick" key={song.id}>
+                <button
+                  className="quick-pick-open"
+                  onClick={() =>
+                    player.getState().playSong(
+                      song,
+                      songs.filter((s) => s.genre === song.genre),
+                    )
+                  }
+                >
+                  <Cover src={a.coverUrl} alt="" />
+                  <span>
+                    <b>{song.title}</b>
+                    <small>{song.artist}</small>
+                  </span>
+                </button>
+                <button
+                  className="quick-pick-play"
+                  aria-label={"Play " + song.title}
+                  onClick={() =>
+                    player.getState().playSong(
+                      song,
+                      songs.filter((s) => s.genre === song.genre),
+                    )
+                  }
+                >
+                  <Play size={16} fill="currentColor" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+      <section className="mix-section">
+        <SectionHead
+          title="Find your frequency"
+          subtitle="A mood, a moment, a whole new direction."
+          to="/radio"
+        />
+        <div className="mix-grid">
+          {[
+            [
+              "focus",
+              "Deep focus",
+              "A little room to think.",
+              "Ambient",
+              "#5e7765",
+            ],
+            [
+              "night",
+              "Midnight drive",
+              "For the scenic route home.",
+              "Electronic",
+              "#82606b",
+            ],
+            [
+              "warm",
+              "Sunday kind of feeling",
+              "Slow down. Stay a while.",
+              "Soul",
+              "#a67c52",
+            ],
+          ].map(([id, title, description, genre, color]) => (
+            <button
+              key={id}
+              className={"mix-card mix-" + id}
+              style={{ "--mix-color": color }}
+              onClick={() => nav("/radio?genre=" + genre)}
+            >
+              <span className="mix-kicker">
+                <Radio size={13} /> LIBRARY STATION
+              </span>
+              <h3>{title}</h3>
+              <p>{description}</p>
+              <span className="mix-play">
+                <Play size={16} fill="currentColor" />
+              </span>
+              <div className="mix-decoration">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+      <div className="home-note">
+        <span>
+          <MusicNote /> {songs.filter((s) => s.demo).length} original demo
+          tracks. A whole world of your own to add.
+        </span>
+        <button onClick={() => nav("/upload")}>
+          Make it yours <Plus size={13} />
+        </button>
+      </div>
     </div>
-  )
+  );
+}
+function MusicNote() {
+  return <Headphones size={14} />;
 }

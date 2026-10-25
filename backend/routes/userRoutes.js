@@ -1,49 +1,71 @@
-const express = require('express')
-const router = express.Router()
-const User = require('../models/User')
-const { protect } = require('../middlewares/authMiddleware')
-
-// @route   PUT /api/users/favourites
-// @desc    Toggle a song in favourites
-// @access  Private
-router.put('/favourites', protect, async (req, res) => {
-  try {
-    const { songId } = req.body
-    const user = await User.findById(req.user._id)
-
-    if (user.favourites.includes(songId)) {
-      user.favourites = user.favourites.filter(id => id.toString() !== songId)
-    } else {
-      user.favourites.push(songId)
-    }
-
-    await user.save()
-    res.json(user.favourites)
-  } catch (error) {
-    res.status(500).json({ message: error.message })
-  }
-})
-
-// @route   PUT /api/users/recently-played
-// @desc    Add album to recently played
-// @access  Private
-router.put('/recently-played', protect, async (req, res) => {
-  try {
-    const { albumId } = req.body
-    const user = await User.findById(req.user._id)
-
-    // Remove if exists, then unshift to front
-    user.recentlyPlayed = user.recentlyPlayed.filter(id => id.toString() !== albumId)
-    user.recentlyPlayed.unshift(albumId)
-    
-    // Keep only last 10
-    user.recentlyPlayed = user.recentlyPlayed.slice(0, 10)
-
-    await user.save()
-    res.json(user.recentlyPlayed)
-  } catch (error) {
-    res.status(500).json({ message: error.message })
-  }
-})
-
-module.exports = router
+const router = require("express").Router(),
+  mongoose = require("mongoose"),
+  { id, wrap, fail } = require("../lib/http"),
+  User = require("../models/User"),
+  Song = require("../models/Song"),
+  Album = require("../models/Album"),
+  { protect } = require("../middlewares/authMiddleware");
+router.use(protect);
+router.put(
+  "/favourites",
+  wrap(async (req, res) => {
+    const songId = id.parse(req.body.songId);
+    if (!(await Song.exists({ _id: songId }))) fail("Track not found.", 404);
+    const oid = new mongoose.Types.ObjectId(songId);
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      [
+        {
+          $set: {
+            favourites: {
+              $cond: [
+                { $in: [oid, { $ifNull: ["$favourites", []] }] },
+                { $setDifference: ["$favourites", [oid]] },
+                { $concatArrays: [{ $ifNull: ["$favourites", []] }, [oid]] },
+              ],
+            },
+          },
+        },
+      ],
+      { returnDocument: "after", updatePipeline: true },
+    );
+    res.json(user.favourites);
+  }),
+);
+router.put(
+  "/recently-played",
+  wrap(async (req, res) => {
+    const albumId = id.parse(req.body.albumId);
+    if (!(await Album.exists({ _id: albumId }))) fail("Album not found.", 404);
+    const oid = new mongoose.Types.ObjectId(albumId);
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      [
+        {
+          $set: {
+            recentlyPlayed: {
+              $slice: [
+                {
+                  $concatArrays: [
+                    [oid],
+                    {
+                      $filter: {
+                        input: { $ifNull: ["$recentlyPlayed", []] },
+                        as: "a",
+                        cond: { $ne: ["$$a", oid] },
+                      },
+                    },
+                  ],
+                },
+                30,
+              ],
+            },
+          },
+        },
+      ],
+      { returnDocument: "after", updatePipeline: true },
+    );
+    res.json(user.recentlyPlayed);
+  }),
+);
+module.exports = router;

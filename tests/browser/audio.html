@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8" /><title>Audio quality verification</title>
+<style>body{font:16px system-ui;max-width:900px;margin:50px auto;padding:30px;background:#16131b;color:#eee}button{padding:16px;border:0;border-radius:10px;background:#f28eae;color:#22131b;font-weight:600}pre{white-space:pre-wrap;line-height:1.8}h1{letter-spacing:-1px}</style>
+<h1>Stereo & headphone surround verification</h1>
+<p>Native signal checks use the same audio engine as Music Max.</p>
+<button id="run">Run audio checks</button><pre id="results" role="status">Ready.</pre>
+<script type="module">
+import { createSoundGraph } from '/audioEngine.js';
+const status=document.getElementById('results'), rate=48000, frames=8192;
+const energy=(a,start=0)=>a.subarray(start).reduce((s,x)=>s+x*x,0);
+const peak=a=>a.reduce((m,x)=>Math.max(m,Math.abs(x)),0);
+const error=(a,b)=>a.reduce((m,x,i)=>Math.max(m,Math.abs(x-b[i])),0);
+async function render(mode,{room=.08,width=.45,kind='left',eq='flat',change=false,hot=false}={}){
+ const ctx=new OfflineAudioContext(2,24000,rate), graph=createSoundGraph(ctx,{soundMode:mode,spatialWidth:width,roomAmount:room,eq});
+ const buffer=ctx.createBuffer(kind==='mono'?1:2,frames,rate), left=buffer.getChannelData(0);
+ for(let i=0;i<frames;i++){
+  const t=i/rate,fade=Math.min(1,i/64,(frames-1-i)/64);
+  left[i]=fade*(.25*Math.sin(2*Math.PI*83*t)+.17*Math.sin(2*Math.PI*947*t)+.09*Math.sin(2*Math.PI*6151*t));
+ }
+ const scale=hot?.98/peak(left):1;
+ for(let i=0;i<frames;i++)left[i]*=scale;
+ if(kind!=='mono'){
+  const right=buffer.getChannelData(1);
+  if(kind==='center')right.set(left);
+  if(kind==='opposed')for(let i=0;i<frames;i++)right[i]=-left[i];
+  if(kind==='right'){right.set(left);left.fill(0);}
+ }
+ const reference=new Float32Array(24000); reference.set(left);
+ const source=ctx.createBufferSource();source.buffer=buffer;source.connect(graph.input);graph.output.connect(ctx.destination);
+ if(change){graph.update({soundMode:'spatial'},true);graph.setEqualizer('warm',true);graph.setEqualizer('flat',true);graph.update({soundMode:'stereo'},true);}
+ source.start();const out=await ctx.startRendering();return {l:out.getChannelData(0),r:out.getChannelData(1),reference};
+}
+function aligned(a,b){
+ let best={correlation:0,gain:0,lag:0};
+ for(let lag=0;lag<600;lag++){
+  let ab=0,aa=0,bb=0;
+  for(let i=100;i<frames-100;i++){ab+=a[i+lag]*b[i];aa+=a[i+lag]**2;bb+=b[i]**2;}
+  const c=ab/Math.sqrt(aa*bb);
+  if(c>best.correlation)best={correlation:c,gain:ab/bb,lag};
+ }return best;
+}
+document.getElementById('run').onclick=async()=>{
+ const rows=[];status.textContent='Rendering native Web Audio…';
+ const check=(name,ok,details='')=>{rows.push(`${ok?'PASS':'FAIL'} — ${name}${details?' ('+details+')':''}`);if(!ok)throw Error(name);};
+ try{
+  const stereo=await render('stereo',{hot:true});
+  check('Flat Stereo preserves original samples and peak level',error(stereo.l,stereo.reference)<1e-6);
+  check('Stereo preserves left-only channel separation',energy(stereo.l)>.1&&energy(stereo.r)<1e-10);
+  const right=await render('stereo',{kind:'right'});check('Right-only recordings stay on the right',energy(right.l)<1e-10&&energy(right.r)>.1);
+  const spatial=await render('spatial');check('Spatial stereo renders both headphone channels',energy(spatial.l)>.1&&energy(spatial.r)>.001);
+  const center=await render('spatial',{kind:'center'}), alignment=aligned(center.l,center.reference);
+  check('Centered vocals retain their waveform',alignment.correlation>.999,`correlation ${alignment.correlation.toFixed(6)}`);
+  check('Centered vocals stay centered',error(center.l,center.r)<1e-6);
+  check('Spatial center stays within 2 dB of original level',alignment.gain>.794&&alignment.gain<1.01,`${(20*Math.log10(alignment.gain)).toFixed(2)} dB`);
+  const mono=await render('spatial',{kind:'mono'});check('Mono remains stable in both ears',error(mono.l,mono.r)<1e-6&&aligned(mono.l,mono.reference).correlation>.999);
+  const roomyCenter=await render('spatial',{kind:'center',room:1});check('Ambience never adds delayed center-vocal echoes',energy(roomyCenter.l,frames+700)<1e-8);
+  const narrow=await render('spatial',{width:0}),wide=await render('spatial',{width:1});check('Width changes stereo detail',error(narrow.l,wide.l)>1e-4);
+  const dry=await render('spatial',{room:0}),room=await render('spatial',{room:1});check('Ambience adds quiet stereo reflections',energy(room.l,frames+700)+energy(room.r,frames+700)>energy(dry.l,frames+700)+energy(dry.r,frames+700)+1e-9);
+  const hot=await render('spatial',{kind:'opposed',width:1,room:1,hot:true});check('Hot stereo sources avoid clipped output',Math.max(peak(hot.l),peak(hot.r))<=1,`peak ${Math.max(peak(hot.l),peak(hot.r)).toFixed(4)}`);
+  const switched=await render('stereo',{change:true,hot:true});check('Returning to Original Stereo restores exact samples',error(switched.l,switched.reference)<1e-6&&energy(switched.r)<1e-10);
+  for(const eq of ['warm','vocal','bright']){const tone=await render('stereo',{eq,hot:true,kind:'center'});check(`${eq} EQ retains headroom`,peak(tone.l)<=1&&error(tone.l,tone.reference)>1e-4);}
+  rows.push(`${rows.length}/${rows.length} checks passed.`);
+ }catch(e){rows.push('ERROR: '+e.message);}
+ status.textContent=rows.join('\n');
+};
+</script></html>

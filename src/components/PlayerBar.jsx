@@ -1,160 +1,151 @@
-import { useState, useEffect, useRef } from 'react'
 import {
-  Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1,
-  Volume2, VolumeX, Volume1,
-  MoreHorizontal, MessageSquare, ListMusic, Star
-} from 'lucide-react'
-import usePlayerStore from '../store/usePlayerStore'
-import { useAuthStore } from '../store/useAuthStore'
-import { useDataStore } from '../store/useDataStore'
-
+  Heart,
+  SkipBack,
+  SkipForward,
+  Play,
+  Pause,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  VolumeX,
+  ListMusic,
+  Mic2,
+  Maximize2,
+  Loader2,
+} from "lucide-react";
+import player from "../store/usePlayerStore";
+import { useDataStore } from "../store/useDataStore";
+import { useUIStore } from "../store/useUIStore";
+import { Cover, IconButton } from "./UI";
+import { formatDuration } from "../utils/helpers";
 export default function PlayerBar() {
-  const {
-    currentSong, isPlaying, volume, progress, duration,
-    shuffle, repeat, showNowPlaying,
-    togglePlay, nextSong, prevSong, setVolume, setProgress,
-    toggleShuffle, toggleRepeat, toggleNowPlaying, toggleQueue,
-  } = usePlayerStore()
-
-  const currentUser = useAuthStore(state => state.currentUser)
-  const userData = useDataStore(state => state.getUserData(currentUser))
-  const albums = useDataStore(state => state.albums)
-  const isFavourite = currentSong ? userData.favourites.includes(currentSong.id) : false
-
-  const albumTitle = currentSong?.album || albums.find(a => a.id === currentSong?.albumId)?.title || 'Unknown Album'
-  const artistName = typeof currentSong?.artist === 'string' ? currentSong.artist : currentSong?.artist?.name || 'Unknown Artist'
-  const coverImg = currentSong?.coverUrl || currentSong?.cover || 'https://via.placeholder.com/48/333/666?text=?'
-
-  const progressRef = useRef(null)
-
-  // Sync progress with actual audio playback
-  useEffect(() => {
-    if (!isPlaying) return
-    const interval = setInterval(() => {
-      usePlayerStore.getState().updateProgress()
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [isPlaying])
-
-  const handleProgressClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect()
-    const ratio = (e.clientX - rect.left) / rect.width
-    setProgress(Math.floor(ratio * duration))
-  }
-
-  const VolumeIcon = volume === 0 ? VolumeX : volume < 0.5 ? Volume1 : Volume2
-
-  if (!currentSong) return null
-
-  const progressPercent = duration > 0 ? (progress / duration) * 100 : 0
-
+  const s = player();
+  const favourites = useDataStore((d) => d.userData.favourites);
+  const p = s.currentSong;
+  const liked = p && favourites.includes(p.id);
+  const favorite = async () => {
+    try {
+      await useDataStore.getState().toggleFavourite(p.id);
+    } catch (e) {
+      useUIStore.getState().notify(e.message);
+    }
+  };
   return (
-    <div className="player-glass h-[56px] rounded-[28px] flex items-center px-4 gap-4 shadow-2xl border border-white/[0.06] min-w-[600px] max-w-[720px]">
-      {/* ── Playback Controls ── */}
-      <div className="flex items-center gap-1.5">
+    <footer className="player-bar" aria-label="Music player">
+      <div className="player-track">
         <button
-          onClick={toggleShuffle}
-          className={`p-1 rounded-full transition-colors ${shuffle ? 'text-am-red' : 'text-am-text-muted hover:text-am-text-secondary'}`}
+          className="player-art"
+          aria-label="Open Now Playing"
+          onClick={s.toggleNowPlaying}
         >
-          <Shuffle size={14} />
+          <Cover src={p?.coverUrl} alt={p?.albumTitle || "No track selected"} />
         </button>
-        <button
-          onClick={prevSong}
-          className="p-1 rounded-full text-am-text-secondary hover:text-am-text transition-all"
+        <button className="player-track-title" onClick={s.toggleNowPlaying}>
+          <b>{p?.title || "Find your next favorite"}</b>
+          <span>{p?.artist || "Choose something to play"}</span>
+        </button>
+        <IconButton
+          label={liked ? "Unfavorite current track" : "Favorite current track"}
+          className={liked ? "favorite" : ""}
+          disabled={!p}
+          onClick={favorite}
         >
-          <SkipBack size={18} fill="currentColor" />
-        </button>
-        <button
-          onClick={togglePlay}
-          className="p-1 rounded-full text-am-text hover:text-white transition-all"
-        >
-          {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
-        </button>
-        <button
-          onClick={nextSong}
-          className="p-1 rounded-full text-am-text-secondary hover:text-am-text transition-all"
-        >
-          <SkipForward size={18} fill="currentColor" />
-        </button>
-        <button
-          onClick={toggleRepeat}
-          className={`p-1 rounded-full transition-colors ${repeat !== 'off' ? 'text-am-red' : 'text-am-text-muted hover:text-am-text-secondary'}`}
-        >
-          {repeat === 'one' ? <Repeat1 size={14} /> : <Repeat size={14} />}
-        </button>
+          <Heart size={17} fill={liked ? "currentColor" : "none"} />
+        </IconButton>
       </div>
-
-      {/* ── Song Info Pill (Progress Bar) ── */}
-      <div
-        ref={progressRef}
-        onClick={handleProgressClick}
-        className="relative flex-1 h-[42px] bg-black/25 rounded-full flex items-center p-[3px] cursor-pointer overflow-hidden group border border-white/[0.04]"
-      >
-        {/* Progress fill */}
-        <div
-          className="absolute inset-y-0 left-0 bg-white/[0.08] transition-all duration-300 ease-linear group-hover:bg-white/[0.12]"
-          style={{ width: `${progressPercent}%` }}
-        />
-
-        {/* Spinning album art */}
-        <div className={`w-9 h-9 rounded-full overflow-hidden flex-shrink-0 relative z-10 shadow-sm ${isPlaying ? 'spin-album' : 'spin-album paused'}`}>
-          <img
-            src={coverImg}
-            alt={currentSong.title}
-            className="w-full h-full object-cover"
-            onError={(e) => { e.target.src = `https://via.placeholder.com/48/333/666?text=${encodeURIComponent(currentSong.title[0])}` }}
-          />
-        </div>
-
-        {/* Text Info */}
-        <div className="flex-1 flex flex-col justify-center px-2.5 min-w-0 relative z-10 pointer-events-none">
-          <div className="flex items-center gap-1">
-            <p className="text-[12px] text-am-text truncate font-semibold tracking-tight">
-              {currentSong.title}
-            </p>
-            {isFavourite && (
-              <Star size={8} className="text-am-red fill-am-red flex-shrink-0" />
+      <div className="player-center">
+        <div className="transport">
+          <IconButton
+            label={s.shuffle ? "Disable shuffle" : "Enable shuffle"}
+            className={s.shuffle ? "enabled" : ""}
+            onClick={s.toggleShuffle}
+          >
+            <Shuffle size={15} />
+          </IconButton>
+          <IconButton label="Previous track" onClick={s.prevSong} disabled={!p}>
+            <SkipBack size={20} fill="currentColor" />
+          </IconButton>
+          <button
+            className="play-toggle"
+            aria-label={s.isPlaying ? "Pause" : "Play"}
+            onClick={s.togglePlay}
+            disabled={!p}
+          >
+            {s.isLoading ? (
+              <Loader2 className="spin" size={21} />
+            ) : s.isPlaying ? (
+              <Pause size={20} fill="currentColor" />
+            ) : (
+              <Play size={20} fill="currentColor" />
             )}
-          </div>
-          <p className="text-[10px] text-am-text-secondary truncate font-medium tracking-tight">
-            {artistName} — {albumTitle}
-          </p>
+          </button>
+          <IconButton label="Next track" onClick={s.nextSong} disabled={!p}>
+            <SkipForward size={20} fill="currentColor" />
+          </IconButton>
+          <IconButton
+            label={"Repeat: " + s.repeat}
+            className={s.repeat !== "off" ? "enabled" : ""}
+            onClick={s.toggleRepeat}
+          >
+            {s.repeat === "one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
+          </IconButton>
         </div>
-      </div>
-
-      {/* ── Right Controls ── */}
-      <div className="flex items-center gap-1">
-        <button className="p-1.5 rounded-full text-am-text-muted hover:text-am-text-secondary transition-colors">
-          <MoreHorizontal size={16} />
-        </button>
-        <button
-          onClick={toggleNowPlaying}
-          className={`p-1.5 rounded-full transition-colors ${showNowPlaying ? 'text-am-red' : 'text-am-text-muted hover:text-am-text-secondary'}`}
-        >
-          <MessageSquare size={14} />
-        </button>
-        <button
-          onClick={toggleQueue}
-          className="p-1.5 rounded-full text-am-text-muted hover:text-am-text-secondary transition-colors"
-        >
-          <ListMusic size={14} />
-        </button>
-
-        {/* Volume */}
-        <div className="flex items-center gap-1.5 ml-1 w-20 group">
-          <VolumeIcon size={14} className="text-am-text-muted group-hover:text-am-text-secondary transition-colors flex-shrink-0" />
+        <div className="seek-control">
+          <time>{formatDuration(s.progress)}</time>
           <input
             type="range"
+            aria-label="Playback position"
             min="0"
-            max="1"
-            step="0.01"
-            value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
-            className="w-full h-1 accent-white"
+            max={s.duration || 0}
+            step=".1"
+            value={Math.min(s.progress, s.duration || 0)}
+            onChange={(e) => s.setProgress(e.target.value)}
+            style={{
+              "--fill": `${s.duration ? (s.progress / s.duration) * 100 : 0}%`,
+            }}
           />
+          <time>{formatDuration(s.duration)}</time>
         </div>
       </div>
-    </div>
-  )
+      <div className="player-extras">
+        <IconButton
+          label="Lyrics"
+          className={s.showLyrics ? "enabled" : ""}
+          onClick={s.toggleLyrics}
+        >
+          <Mic2 size={17} />
+        </IconButton>
+        <IconButton
+          label="Up Next queue"
+          className={s.showQueue ? "enabled" : ""}
+          onClick={s.toggleQueue}
+        >
+          <ListMusic size={19} />
+        </IconButton>
+        <span className="player-divider" />
+        <IconButton label={s.muted ? "Unmute" : "Mute"} onClick={s.toggleMute}>
+          {s.muted || s.volume === 0 ? (
+            <VolumeX size={17} />
+          ) : (
+            <Volume2 size={17} />
+          )}
+        </IconButton>
+        <input
+          type="range"
+          className="volume-slider"
+          aria-label="Volume"
+          min="0"
+          max="1"
+          step=".01"
+          value={s.muted ? 0 : s.volume}
+          onChange={(e) => s.setVolume(e.target.value)}
+          style={{ "--fill": `${s.volume * 100}%` }}
+        />
+        <IconButton label="Expand player" onClick={s.toggleNowPlaying}>
+          <Maximize2 size={16} />
+        </IconButton>
+      </div>
+    </footer>
+  );
 }

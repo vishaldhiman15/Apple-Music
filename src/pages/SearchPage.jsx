@@ -1,86 +1,211 @@
-import { useOutletContext } from 'react-router-dom'
-import { categories } from '../data/constants'
-import { useDataStore } from '../store/useDataStore'
-import usePlayerStore from '../store/usePlayerStore'
-
-function CategoryCard({ category }) {
-  return (
-    <div className="relative rounded-[10px] overflow-hidden aspect-[4/3] cursor-pointer group">
-      <div className={`absolute inset-0 bg-gradient-to-br ${category.gradient}`} />
-      {category.image && (
-        <img
-          src={category.image}
-          alt={category.name}
-          className="absolute inset-0 w-full h-full object-cover opacity-40 group-hover:opacity-55 transition-opacity mix-blend-overlay"
-          onError={(e) => { e.target.style.display = 'none' }}
-        />
-      )}
-      <div className="absolute inset-0 category-overlay" />
-      <div className="absolute bottom-0 left-0 right-0 p-3">
-        <h3 className="text-white text-[13px] font-semibold leading-tight drop-shadow-md">
-          {category.name}
-        </h3>
-      </div>
-      <div className="absolute inset-0 bg-white/0 group-hover:bg-white/[0.06] transition-opacity duration-200" />
-    </div>
-  )
-}
-
+import OnlineMusic from "../components/OnlineMusic";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
+import { Search, X, ArrowUpRight, Compass, Play } from "lucide-react";
+import { useDataStore } from "../store/useDataStore";
+import {
+  AlbumCard,
+  SongTable,
+  Cover,
+  SectionHead,
+  Empty,
+  IconButton,
+} from "../components/UI";
+import { readStorage, writeStorage } from "../lib/storage";
 export default function SearchPage() {
-  const { searchQuery } = useOutletContext() || { searchQuery: '' }
-  const songs = useDataStore(s => s.songs)
-  const playSong = usePlayerStore(s => s.playSong)
-
-  const query = searchQuery?.toLowerCase().trim()
-  
-  const searchResults = query
-    ? songs.filter(s => 
-        s.title?.toLowerCase().includes(query) || 
-        (typeof s.artist === 'string' ? s.artist.toLowerCase().includes(query) : s.artist?.name?.toLowerCase().includes(query))
-      )
-    : []
-
-  if (query) {
-    return (
-      <div className="px-6 pb-8 animate-fade-in">
-        <h1 className="text-[28px] font-bold text-am-text mb-5 tracking-tight">Search Results</h1>
-        {searchResults.length === 0 ? (
-          <p className="text-am-text-muted">No results found for "{searchQuery}"</p>
-        ) : (
-          <div className="flex flex-col">
-            {searchResults.map((song) => (
-              <div 
-                key={song.id} 
-                className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.04] rounded-md cursor-pointer group"
-                onClick={() => playSong(song, searchResults)}
-              >
-                <img 
-                  src={song.coverUrl || song.cover || 'https://via.placeholder.com/40/2a2a2c/666'} 
-                  alt={song.title}
-                  className="w-10 h-10 rounded shadow-sm object-cover" 
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[14px] text-am-text font-medium truncate">{song.title}</div>
-                  <div className="text-[12px] text-am-text-secondary truncate">
-                    {typeof song.artist === 'string' ? song.artist : song.artist?.name}
-                  </div>
-                </div>
+  const [params, setParams] = useSearchParams(),
+    nav = useNavigate();
+  const [query, setQuery] = useState(params.get("q") || ""),
+    [tab, setTab] = useState("All"),
+    [recent, setRecent] = useState(() => readStorage("music-searches", []));
+  const { songs, albums, artists } = useDataStore();
+  useEffect(() => setQuery(params.get("q") || ""), [params]);
+  const normalize = (s) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  const q = normalize(query.trim());
+  const result = {
+    songs: songs.filter((s) =>
+      normalize(
+        s.title + " " + s.artist + " " + s.genre + " " + s.albumTitle,
+      ).includes(q),
+    ),
+    albums: albums.filter((a) =>
+      normalize(a.title + " " + a.artist + " " + a.genre).includes(q),
+    ),
+    artists: artists.filter((a) => normalize(a.name).includes(q)),
+  };
+  function saveSearch(e) {
+    e?.preventDefault();
+    if (!query.trim()) return;
+    const list = [
+      query.trim(),
+      ...recent.filter((x) => x !== query.trim()),
+    ].slice(0, 8);
+    setRecent(list);
+    writeStorage("music-searches", list);
+    setParams({ q: query });
+  }
+  const genres = [...new Set(songs.map((s) => s.genre).filter(Boolean))];
+  return (
+    <div className="page-container search-page">
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">THERE’S ALWAYS SOMETHING MORE</span>
+          <h1>
+            Follow your curiosity<span className="heading-dot">.</span>
+          </h1>
+        </div>
+      </header>
+      <form className="large-search" onSubmit={saveSearch}>
+        <Search size={24} />
+        <input
+          autoFocus
+          data-search
+          aria-label="Search songs, artists, albums, or genres"
+          placeholder="Songs, artists, albums, a feeling…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        {query && (
+          <IconButton
+            label="Clear search"
+            onClick={() => {
+              setQuery("");
+              setParams({});
+            }}
+          >
+            <X size={20} />
+          </IconButton>
+        )}
+      </form>
+      {!q ? (
+        <>
+          {recent.length > 0 && (
+            <section>
+              <SectionHead
+                title="Your recent curiosities"
+                action={
+                  <button
+                    className="small-link"
+                    onClick={() => {
+                      setRecent([]);
+                      writeStorage("music-searches", []);
+                    }}
+                  >
+                    Clear
+                  </button>
+                }
+              />
+              <div className="recent-searches">
+                {recent.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setQuery(s);
+                      setParams({ q: s });
+                    }}
+                  >
+                    <Search size={14} />
+                    {s}
+                    <ArrowUpRight size={13} />
+                  </button>
+                ))}
               </div>
+            </section>
+          )}
+          <SectionHead
+            title="Find your mood"
+            subtitle="Start somewhere. See where it takes you."
+          />
+          <div className="genre-grid">
+            {genres.map((g, i) => {
+              const a = albums.find((a) => a.genre === g);
+              return (
+                <button
+                  className={"genre-card genre-" + (i % 4)}
+                  style={{ "--genre-color": a?.color || "#564662" }}
+                  key={g}
+                  onClick={() => {
+                    setQuery(g);
+                    setParams({ q: g });
+                  }}
+                >
+                  <h2>{g}</h2>
+                  <ArrowUpRight size={23} />
+                  <Cover src={a?.coverUrl} alt="" />
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <>
+          <OnlineMusic query={query} />
+          <div className="filter-pills">
+            {["All", "Songs", "Albums", "Artists"].map((t) => (
+              <button
+                key={t}
+                className={t === tab ? "active" : ""}
+                onClick={() => setTab(t)}
+              >
+                {t}
+              </button>
             ))}
           </div>
-        )}
-      </div>
-    )
-  }
-
-  return (
-    <div className="px-6 pb-8 animate-fade-in">
-      <h1 className="text-[28px] font-bold text-am-text mb-5 tracking-tight">Browse</h1>
-      <div className="grid grid-cols-4 xl:grid-cols-5 gap-3">
-        {categories.map(cat => (
-          <CategoryCard key={cat.id} category={cat} />
-        ))}
-      </div>
+          {(tab === "All" || tab === "Albums") && result.albums.length > 0 && (
+            <section className="album-section">
+              <SectionHead
+                title="Albums"
+                subtitle={`${result.albums.length} finds for “${query}”`}
+              />
+              <div className="album-grid">
+                {result.albums.map((a) => (
+                  <AlbumCard key={a.id} album={a} />
+                ))}
+              </div>
+            </section>
+          )}
+          {(tab === "All" || tab === "Artists") &&
+            result.artists.length > 0 && (
+              <section>
+                <SectionHead title="Artists" />
+                <div className="artist-result-list">
+                  {result.artists.map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => nav("/library/artists/" + a.id)}
+                    >
+                      <Cover src={a.image} alt="" />
+                      <span>
+                        <b>{a.name}</b>
+                        <small>Artist</small>
+                      </span>
+                      <ArrowUpRight size={17} />
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+          {(tab === "All" || tab === "Songs") && result.songs.length > 0 && (
+            <section>
+              <SectionHead title="Songs" />
+              <SongTable songs={result.songs} />
+            </section>
+          )}
+          {!(tab === "All"
+            ? result.songs.length + result.albums.length + result.artists.length
+            : result[tab.toLowerCase()].length) && (
+            <Empty
+              icon={Search}
+              title="Nothing here just yet."
+              body="No matches in your saved library. Try the online catalog above for more music."
+            />
+          )}
+        </>
+      )}
     </div>
-  )
+  );
 }

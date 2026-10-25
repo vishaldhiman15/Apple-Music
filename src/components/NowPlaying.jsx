@@ -1,235 +1,291 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from "react";
 import {
-  X, Maximize2, Play, Pause, SkipBack, SkipForward,
-  Shuffle, Repeat, Repeat1, Volume2, Star, MoreHorizontal,
-  MessageSquare, ListMusic
-} from 'lucide-react'
-import usePlayerStore from '../store/usePlayerStore'
-import { useDataStore } from '../store/useDataStore'
-import { formatDuration } from '../utils/helpers'
-
-const sampleLyrics = [
-  "In the silence of the night",
-  "We find our way through shadows",
-  "Dancing with the moonlight",
-  "Whispers carry on the wind",
-  "",
-  "Every note a story told",
-  "Melodies of days gone by",
-  "Hearts that beat in rhythm",
-  "Souls that learn to fly",
-  "",
-  "Through the waves of sound we ride",
-  "Finding peace in every stride",
-  "Music is the bridge between",
-  "The world we know and dreams unseen",
-  "",
-  "Let the melody unfold",
-  "Stories waiting to be told",
-  "In this moment, here and now",
-  "We remember, we allow",
-]
-
-export default function NowPlaying() {
-  const {
-    currentSong, isPlaying, progress, duration,
-    shuffle, repeat, volume,
-    togglePlay, nextSong, prevSong, setProgress,
-    toggleShuffle, toggleRepeat, closeNowPlaying, setVolume,
-  } = usePlayerStore()
-  
-  const albums = useDataStore(state => state.albums)
-  
-  const albumTitle = currentSong?.album || albums.find(a => a.id === currentSong?.albumId)?.title || 'Unknown Album'
-  const artistName = typeof currentSong?.artist === 'string' ? currentSong.artist : currentSong?.artist?.name || 'Unknown Artist'
-  const coverImg = currentSong?.coverUrl || currentSong?.cover || 'https://via.placeholder.com/320/333/666?text=?'
-
-  const [activeLyricIndex, setActiveLyricIndex] = useState(3)
-
-  // Simulate lyric scrolling
+  ChevronDown,
+  Mic2,
+  ListMusic,
+  SlidersHorizontal,
+  Heart,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Volume2,
+  Loader2,
+} from "lucide-react";
+import player, { enableAudioGraph, getAnalyser } from "../store/usePlayerStore";
+import { Cover, IconButton } from "./UI";
+import { Lyrics } from "./PlayerPanels";
+import SoundControls from "./SoundControls";
+import { formatDuration } from "../utils/helpers";
+function Visualizer() {
+  const ref = useRef();
   useEffect(() => {
-    if (!isPlaying) return
-    const interval = setInterval(() => {
-      setActiveLyricIndex(prev => (prev + 1) % sampleLyrics.length)
-    }, 4000)
-    return () => clearInterval(interval)
-  }, [isPlaying])
-
-  if (!currentSong) return null
-
-  const progressPercent = duration > 0 ? (progress / duration) * 100 : 0
-
+    const canvas = ref.current,
+      ctx = canvas.getContext("2d");
+    let raf;
+    const draw = () => {
+      ctx.clearRect(0, 0, 640, 160);
+      const analyser = getAnalyser();
+      if (analyser) {
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        data.forEach((v, i) => {
+          const h = (v / 255) * 130;
+          ctx.fillStyle = `rgba(255,255,255,${0.15 + (v / 255) * 0.6})`;
+          ctx.fillRect(i * 10, 150 - h, 5, h);
+        });
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => cancelAnimationFrame(raf);
+  }, []);
   return (
-    <div className="fixed inset-0 z-50 animate-fade-in">
-      {/* Background with album art blur */}
-      <div className="absolute inset-0 overflow-hidden">
-        <img
-          src={coverImg}
-          alt=""
-          className="w-full h-full object-cover scale-[1.8] blur-[80px] opacity-35"
-        />
-        <div className="absolute inset-0 bg-black/55" />
-      </div>
-
-      {/* Content */}
-      <div className="relative z-10 h-full flex flex-col">
-        {/* Top Bar */}
-        <div className="flex items-center justify-between p-4">
-          <div className="flex items-center gap-1.5">
+    <canvas
+      ref={ref}
+      width="640"
+      height="160"
+      className="visualizer"
+      aria-label="Audio spectrum"
+    />
+  );
+}
+export default function NowPlaying() {
+  const s = player();
+  const [tab, setTab] = useState("art");
+  const ref = useRef();
+  useEffect(() => {
+    const prev = document.activeElement;
+    ref.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") s.closeNowPlaying();
+      if (e.key === "Tab") {
+        const items = ref.current?.querySelectorAll(
+          'button:not(:disabled),input,select,[tabindex="0"]',
+        );
+        if (!items?.length) return;
+        const first = items[0],
+          last = items[items.length - 1];
+        if (
+          e.shiftKey &&
+          (document.activeElement === first ||
+            document.activeElement === ref.current)
+        ) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      prev?.focus();
+    };
+  }, []);
+  if (!s.currentSong) return null;
+  const p = s.currentSong;
+  return (
+    <section
+      className="now-playing"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Now Playing"
+      ref={ref}
+      tabIndex={-1}
+      style={{ "--album-color": p.color || "#452f3f" }}
+    >
+      <div className="now-playing-glow" />
+      <header>
+        <IconButton label="Close Now Playing" onClick={s.closeNowPlaying}>
+          <ChevronDown size={26} />
+        </IconButton>
+        <div>
+          <span className="eyebrow">NOW PLAYING</span>
+          <p>{p.albumTitle}</p>
+        </div>
+        <div className="now-tabs">
+          <button
+            className={tab === "art" ? "active" : ""}
+            onClick={() => setTab("art")}
+          >
+            Artwork
+          </button>
+          <button
+            className={tab === "lyrics" ? "active" : ""}
+            onClick={() => setTab("lyrics")}
+          >
+            Lyrics
+          </button>
+          <button
+            className={tab === "sound" ? "active" : ""}
+            onClick={() => {
+              enableAudioGraph();
+              setTab("sound");
+            }}
+          >
+            Sound
+          </button>
+        </div>
+      </header>
+      <div className="now-playing-body">
+        <div className="now-playing-left">
+          <Cover
+            className={"large-art " + (s.isPlaying ? "is-playing" : "")}
+            src={p.coverUrl}
+            alt={p.albumTitle}
+          />
+          <div className="now-song-label">
+            <div>
+              <h1>{p.title}</h1>
+              <p>{p.artist}</p>
+            </div>
             <button
-              onClick={closeNowPlaying}
-              className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/70 hover:text-white"
+              className="audio-format-badge"
+              aria-label={
+                "Sound mode: " +
+                (s.soundMode === "spatial" ? "Spatial stereo" : "Stereo")
+              }
+              onClick={() => {
+                enableAudioGraph();
+                setTab("sound");
+              }}
             >
-              <X size={16} />
-            </button>
-            <button className="p-2 rounded-full hover:bg-white/10 transition-colors text-white/70 hover:text-white">
-              <Maximize2 size={14} />
+              {s.soundMode === "spatial" ? "SPATIAL STEREO" : "STEREO"}
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-white/[0.08] rounded-full px-3 py-1.5">
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={(e) => setVolume(parseFloat(e.target.value))}
-                className="w-20 h-1 accent-white"
-              />
-              <Volume2 size={14} className="text-white/70" />
+          <div className="now-seek">
+            <input
+              type="range"
+              aria-label="Now Playing position"
+              min="0"
+              max={s.duration || 0}
+              step=".1"
+              value={Math.min(s.progress, s.duration || 0)}
+              onChange={(e) => s.setProgress(e.target.value)}
+              style={{
+                "--fill": `${s.duration ? (s.progress / s.duration) * 100 : 0}%`,
+              }}
+            />
+            <div>
+              <time>{formatDuration(s.progress)}</time>
+              <time>−{formatDuration(s.duration - s.progress)}</time>
             </div>
+          </div>
+          <div className="transport now-transport">
+            <IconButton
+              label="Shuffle"
+              className={s.shuffle ? "enabled" : ""}
+              onClick={s.toggleShuffle}
+            >
+              <Shuffle size={20} />
+            </IconButton>
+            <IconButton label="Previous" onClick={s.prevSong}>
+              <SkipBack size={29} fill="currentColor" />
+            </IconButton>
+            <button
+              aria-label={
+                s.isPlaying ? "Pause full player" : "Play full player"
+              }
+              className="now-play-button"
+              onClick={s.togglePlay}
+            >
+              {s.isLoading ? (
+                <Loader2 className="spin" size={31} />
+              ) : s.isPlaying ? (
+                <Pause size={34} fill="currentColor" />
+              ) : (
+                <Play size={34} fill="currentColor" />
+              )}
+            </button>
+            <IconButton label="Next" onClick={s.nextSong}>
+              <SkipForward size={29} fill="currentColor" />
+            </IconButton>
+            <IconButton
+              label={"Full player repeat " + s.repeat}
+              className={s.repeat !== "off" ? "enabled" : ""}
+              onClick={s.toggleRepeat}
+            >
+              {s.repeat === "one" ? (
+                <Repeat1 size={20} />
+              ) : (
+                <Repeat size={20} />
+              )}
+            </IconButton>
           </div>
         </div>
-
-        {/* Main Content */}
-        <div className="flex-1 flex items-center px-8 pb-8 gap-10">
-          {/* Left - Album Art & Controls */}
-          <div className="w-[380px] flex-shrink-0 flex flex-col items-center">
-            {/* Album Art */}
-            <div className="w-[320px] h-[320px] rounded-xl overflow-hidden shadow-album mb-6">
-              <img
-                src={coverImg}
-                alt={albumTitle}
-                className="w-full h-full object-cover"
-                onError={(e) => { e.target.src = `https://via.placeholder.com/320/333/666?text=${encodeURIComponent(currentSong.title[0])}` }}
-              />
-            </div>
-
-            {/* Song Info */}
-            <div className="w-full px-4">
-              <div className="flex items-center justify-between mb-1">
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-white text-lg font-semibold truncate">{currentSong.title}</h2>
-                  <p className="text-white/50 text-sm">
-                    {artistName} — {albumTitle}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0 ml-3">
-                  <button className="p-1.5 text-white/50 hover:text-white transition-colors">
-                    <Star size={16} className={currentSong.isFavourite ? 'fill-am-red text-am-red' : ''} />
-                  </button>
-                  <button className="p-1.5 text-white/50 hover:text-white transition-colors">
-                    <MoreHorizontal size={16} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="mt-4">
-                <div
-                  className="w-full h-[3px] bg-white/15 rounded-full cursor-pointer group hover:h-[5px] transition-all"
-                  onClick={(e) => {
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const ratio = (e.clientX - rect.left) / rect.width
-                    setProgress(Math.floor(ratio * duration))
-                  }}
-                >
-                  <div
-                    className="h-full bg-white/65 rounded-full transition-[width] duration-300"
-                    style={{ width: `${progressPercent}%` }}
-                  />
-                </div>
-                <div className="flex justify-between mt-1.5">
-                  <span className="text-[10px] text-white/40 tabular-nums">{formatDuration(progress)}</span>
-                  <span className="text-[10px] text-white/40 tabular-nums">-{formatDuration(Math.max(0, duration - progress))}</span>
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div className="flex items-center justify-center gap-5 mt-3">
-                <button
-                  onClick={toggleShuffle}
-                  className={`p-1 transition-colors ${shuffle ? 'text-white' : 'text-white/35 hover:text-white/60'}`}
-                >
-                  <Shuffle size={16} />
-                </button>
-                <button
-                  onClick={prevSong}
-                  className="p-1 text-white/75 hover:text-white transition-colors"
-                >
-                  <SkipBack size={22} fill="currentColor" />
-                </button>
-                <button
-                  onClick={togglePlay}
-                  className="p-2 text-white hover:scale-105 transition-transform"
-                >
-                  {isPlaying ? <Pause size={32} fill="currentColor" /> : <Play size={32} fill="currentColor" />}
-                </button>
-                <button
-                  onClick={nextSong}
-                  className="p-1 text-white/75 hover:text-white transition-colors"
-                >
-                  <SkipForward size={22} fill="currentColor" />
-                </button>
-                <button
-                  onClick={toggleRepeat}
-                  className={`p-1 transition-colors ${repeat !== 'off' ? 'text-white' : 'text-white/35 hover:text-white/60'}`}
-                >
-                  {repeat === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Right - Lyrics */}
-          <div className="flex-1 h-full flex flex-col justify-center overflow-hidden">
-            <div className="space-y-5">
-              {sampleLyrics.map((line, i) => {
-                if (!line) return <div key={i} className="h-3" />
-                const distance = Math.abs(i - activeLyricIndex)
-                const isActive = i === activeLyricIndex
-                return (
-                  <p
-                    key={i}
-                    className={`text-[28px] font-bold transition-all duration-700 ease-out cursor-pointer
-                      ${isActive
-                        ? 'text-white opacity-100'
-                        : distance === 1
-                          ? 'text-white/30 opacity-60'
-                          : distance === 2
-                            ? 'text-white/15 opacity-40'
-                            : 'text-white/8 opacity-20'
-                      }`}
+        <div className="now-playing-right">
+          {tab === "lyrics" ? (
+            <Lyrics full />
+          ) : tab === "sound" ? (
+            <div className="sound-panel">
+              <span className="eyebrow">A NEW DIMENSION OF LISTENING</span>
+              <h2>Sound, all around you.</h2>
+              <p>Clear vocals. Tight bass. Space that feels natural.</p>
+              <SoundControls />
+              <div className="sound-eq-label">TONE</div>
+              <div className="eq-options">
+                {[
+                  ["flat", "Original"],
+                  ["warm", "Warm"],
+                  ["vocal", "Vocal"],
+                  ["bright", "Bright"],
+                ].map(([id, name]) => (
+                  <button
+                    key={id}
+                    className={s.eq === id ? "active" : ""}
+                    onClick={() => s.setEqualizer(id)}
                   >
-                    {line}
-                  </p>
-                )
-              })}
+                    {name}
+                  </button>
+                ))}
+              </div>
+              <Visualizer />
+              <label className="now-volume">
+                <Volume2 size={20} />
+                <input
+                  type="range"
+                  aria-label="Full player volume"
+                  min="0"
+                  max="1"
+                  step=".01"
+                  value={s.volume}
+                  onChange={(e) => s.setVolume(e.target.value)}
+                  style={{ "--fill": `${s.volume * 100}%` }}
+                />
+              </label>
             </div>
-          </div>
-        </div>
-
-        {/* Bottom bar */}
-        <div className="flex items-center justify-end px-6 pb-4 gap-2">
-          <button className="p-2 rounded-full bg-white/[0.06] hover:bg-white/[0.12] transition-colors text-white/60">
-            <MessageSquare size={14} />
-          </button>
-          <button className="p-2 rounded-full bg-white/[0.06] hover:bg-white/[0.12] transition-colors text-white/60">
-            <ListMusic size={14} />
-          </button>
+          ) : (
+            <div className="art-caption">
+              <span className="eyebrow">LET EVERYTHING ELSE FADE.</span>
+              <h2>
+                Just you.
+                <br />
+                And the music.
+              </h2>
+              <div className="quiet-wave">
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+                <i />
+              </div>
+              <p>
+                {p.instrumental
+                  ? "An original instrumental. A little space to get lost in."
+                  : p.genre + " · " + p.albumTitle}
+              </p>
+            </div>
+          )}
         </div>
       </div>
-    </div>
-  )
+    </section>
+  );
 }

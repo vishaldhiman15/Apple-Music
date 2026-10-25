@@ -1,43 +1,43 @@
-import { useState } from 'react'
-import { Outlet } from 'react-router-dom'
-import Sidebar from '../components/Sidebar'
-import TopBar from '../components/TopBar'
-import PlayerBar from '../components/PlayerBar'
-import NowPlaying from '../components/NowPlaying'
-import usePlayerStore from '../store/usePlayerStore'
-
+import { useEffect, useRef } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import Sidebar from "../components/Sidebar";
+import TopBar from "../components/TopBar";
+import PlayerBar from "../components/PlayerBar";
+import NowPlaying from "../components/NowPlaying";
+import PlayerPanels from "../components/PlayerPanels";
+import player from "../store/usePlayerStore";
+import { useUIStore } from "../store/useUIStore";
+import useKeyboard from "../hooks/useKeyboard";
 export default function AppLayout() {
-  const [searchQuery, setSearchQuery] = useState('')
-  const showNowPlaying = usePlayerStore(s => s.showNowPlaying)
-
+  const show = player((s) => s.showNowPlaying),
+    error = player((s) => s.error),
+    notify = useUIStore((s) => s.notify);
+  const ref = useRef(),
+    location = useLocation();
+  useKeyboard();
+  useEffect(() => {
+    if (error) notify(error);
+  }, [error]);
+  useEffect(() => {
+    ref.current?.scrollTo({ top: 0 });
+  }, [location.pathname]);
   return (
-    <div className="h-screen flex flex-col overflow-hidden bg-am-bg relative">
-      {/* Main area (sidebar + content) */}
-      <div className="flex flex-1 min-h-0 relative z-10">
-        {/* Sidebar */}
-        <Sidebar />
-
-        {/* Content area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Top Bar */}
-          <TopBar searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-
-          {/* Page Content */}
-          <main className="flex-1 overflow-y-auto overflow-x-hidden pt-4 pb-28">
-            <Outlet context={{ searchQuery }} />
-          </main>
-        </div>
+    <div className="app-shell">
+      <Sidebar />
+      <div className="app-workspace">
+        <TopBar />
+        <main
+          ref={ref}
+          id="main-content"
+          className="page-content"
+          key={location.pathname}
+        >
+          <Outlet />
+        </main>
       </div>
-
-      {/* Player Bar — docked bottom, full width */}
-      <div className="absolute bottom-4 left-[220px] right-0 flex justify-center pointer-events-none z-40 px-6">
-        <div className="pointer-events-auto">
-          <PlayerBar />
-        </div>
-      </div>
-
-      {/* Now Playing Overlay */}
-      {showNowPlaying && <NowPlaying />}
+      <PlayerBar />
+      <PlayerPanels />
+      {show && <NowPlaying />}
     </div>
-  )
+  );
 }

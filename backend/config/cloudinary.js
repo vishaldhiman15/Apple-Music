@@ -1,36 +1,16 @@
-const cloudinary = require('cloudinary').v2;
-const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const multer = require('multer');
-
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
-
-const storage = new CloudinaryStorage({
-  cloudinary: cloudinary,
-  params: async (req, file) => {
-    // Determine folder and resource_type based on mimetype
-    let folder = 'applemusic/others';
-    let resource_type = 'auto';
-
-    if (file.mimetype.startsWith('image/')) {
-      folder = 'applemusic/images';
-      resource_type = 'image';
-    } else if (file.mimetype.startsWith('audio/')) {
-      folder = 'applemusic/audio';
-      resource_type = 'video'; // Cloudinary treats audio as video for some formats, auto handles this usually
-    }
-
-    return {
-      folder: folder,
-      resource_type: resource_type,
-      allowed_formats: ['jpg', 'png', 'jpeg', 'mp3', 'wav', 'm4a']
-    };
-  }
-});
-
-const upload = multer({ storage: storage });
-
-module.exports = { cloudinary, upload };
+require("./env");
+const cloudinary = require("cloudinary").v2;
+const options = { secure: true };
+for (const [key, name] of Object.entries({
+  cloud_name: "CLOUDINARY_CLOUD_NAME",
+  api_key: "CLOUDINARY_API_KEY",
+  api_secret: "CLOUDINARY_API_SECRET",
+})) {
+  if (process.env[name]?.trim()) options[key] = process.env[name].trim();
+}
+cloudinary.config(options);
+const configured = () => {
+  const { cloud_name, api_key, api_secret } = cloudinary.config();
+  return Boolean(cloud_name && api_key && api_secret);
+};
+module.exports = { cloudinary, configured };

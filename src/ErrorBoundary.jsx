@@ -1,27 +1,24 @@
-import React from 'react';
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { hasError: false, error: null, info: null };
+import React from "react";
+export default class ErrorBoundary extends React.Component {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
   }
-  static getDerivedStateFromError(error) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error, info) {
-    this.setState({ info });
-    console.error("ErrorBoundary caught:", error, info);
+  componentDidCatch(error) {
+    console.error("Music Max could not render:", error);
   }
   render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ color: 'red', padding: '20px', background: 'white', zIndex: 9999, position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
-          <h1>Something went wrong.</h1>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.error?.toString()}</pre>
-          <pre style={{ whiteSpace: 'pre-wrap' }}>{this.state.info?.componentStack}</pre>
-        </div>
-      );
-    }
-    return this.props.children;
+    return this.state.failed ? (
+      <div className="fatal-error">
+        <h1>A brief pause.</h1>
+        <p>
+          Something interrupted the app. Your saved library is still on this
+          device.
+        </p>
+        <button onClick={() => location.reload()}>Reload Music</button>
+      </div>
+    ) : (
+      this.props.children
+    );
   }
 }
-export default ErrorBoundary;

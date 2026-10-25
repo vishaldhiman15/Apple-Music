@@ -1,37 +1,56 @@
 {
   "name": "apple-music-clone",
   "private": true,
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
+    "dev:full": "node scripts/dev-full.mjs",
+    "server": "node backend/server.js",
+    "seed": "node backend/seed.js",
+    "build": "node scripts/build-online.mjs",
+    "preview": "node scripts/preview-online.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "setup:local": "node scripts/setup-local.mjs",
+    "services:check": "node scripts/check-services.mjs",
+    "test:audio": "node scripts/check-audio.mjs",
+    "db:generate": "drizzle-kit generate",
+    "build:device": "vite build && node scripts/build-offline.mjs",
+    "media:publish": "node scripts/publish-demo-media.mjs",
+    "vercel-build": "npm run build:device"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
-    "cloudinary": "^1.41.3",
+    "cloudinary": "^2.8.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "howler": "^2.2.4",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
-    "lucide-react": "^0.441.0",
+    "lucide-react": "^0.468.0",
     "mongoose": "^9.9.5",
-    "multer": "^2.3.0",
-    "multer-storage-cloudinary": "^4.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0",
+    "react-router-dom": "^7.18.4",
+    "zod": "^4.1.0",
     "zustand": "^4.5.4"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
+    "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "^10.4.20",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "postcss": "^8.4.41",
-    "tailwindcss": "^3.4.10",
-    "vite": "^5.4.2"
+    "vite": "^7.3.7"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "overrides": {
+    "@esbuild-kit/core-utils": {
+      "esbuild": "^0.25.12"
+    }
   }
 }
